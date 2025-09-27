@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { appWindow } from '@tauri-apps/api/window';
 import { 
@@ -6,7 +6,7 @@ import {
   StopIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import { Copy, Check, Eraser, Bookmark, X } from 'lucide-react';
+import { Copy, Check, Bookmark, X } from 'lucide-react';
 
 function App() {
   const [currentText, setCurrentText] = useState('');
@@ -19,9 +19,11 @@ function App() {
   const [isCopied, setIsCopied] = useState(false);
   const [hoveredBubble, setHoveredBubble] = useState(null);
   const [transcriptionMode, setTranscriptionMode] = useState('replace'); // 'replace' or 'append'
+  const [copiedItems, setCopiedItems] = useState(new Set()); // 追踪已复制的条目ID
   
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const swipeStartX = useRef(null);
 
   // 添加到历史记录的辅助函数，带去重检查
   const addToHistory = (text) => {
@@ -174,13 +176,27 @@ function App() {
     }
   };
 
-  const copyToClipboard = async (text) => {
+  const copyToClipboard = async (text, itemId = null) => {
     try {
       await navigator.clipboard.writeText(text);
-      setIsCopied(true);
-      setTimeout(() => {
-        setIsCopied(false);
-      }, 2000);
+      
+      if (itemId) {
+        // 为特定条目设置复制状态
+        setCopiedItems(prev => new Set(prev).add(itemId));
+        setTimeout(() => {
+          setCopiedItems(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(itemId);
+            return newSet;
+          });
+        }, 2000);
+      } else {
+        // 顶部复制按钮的原有逻辑
+        setIsCopied(true);
+        setTimeout(() => {
+          setIsCopied(false);
+        }, 2000);
+      }
     } catch (error) {
       console.error('Copy failed:', error);
       showToastMessage('复制失败');
@@ -201,6 +217,70 @@ function App() {
     
     return date.toLocaleTimeString().slice(0, 5);
   };
+
+  // 处理滑动手势
+  const handleTouchStart = useCallback((e) => {
+    swipeStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (swipeStartX.current === null) return;
+    
+    const endX = e.changedTouches[0].clientX;
+    const diffX = endX - swipeStartX.current;
+    
+    // 如果滑动距离超过50px，则切换模式
+    if (Math.abs(diffX) > 50) {
+      if (diffX > 0) {
+        // 向右滑动 - 切换到覆盖模式
+        setTranscriptionMode('replace');
+      } else {
+        // 向左滑动 - 切换到追加模式
+        setTranscriptionMode('append');
+      }
+    }
+    
+    swipeStartX.current = null;
+  }, []);
+
+  const handleMouseDown = useCallback((e) => {
+    swipeStartX.current = e.clientX;
+  }, []);
+
+  const handleMouseUp = useCallback((e) => {
+    if (swipeStartX.current === null) return;
+    
+    const diffX = e.clientX - swipeStartX.current;
+    
+    // 如果滑动距离超过50px，则切换模式
+    if (Math.abs(diffX) > 50) {
+      if (diffX > 0) {
+        // 向右滑动 - 切换到覆盖模式
+        setTranscriptionMode('replace');
+      } else {
+        // 向左滑动 - 切换到追加模式
+        setTranscriptionMode('append');
+      }
+    }
+    
+    swipeStartX.current = null;
+  }, []);
+
+  // 处理macOS触控板滑动
+  const handleWheelSwipe = useCallback((e) => {
+    // 检测是否为水平滑动（deltaX 大于 deltaY）
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 30) {
+      e.preventDefault(); // 阻止默认的水平滚动
+      
+      if (e.deltaX > 0) {
+        // 向右滑动 - 追加模式
+        setTranscriptionMode('append');
+      } else {
+        // 向左滑动 - 覆盖模式
+        setTranscriptionMode('replace');
+      }
+    }
+  }, []);
 
   const showToastMessage = (message) => {
     setToastMessage(message);
@@ -281,14 +361,18 @@ function App() {
               {/* 分隔线 */}
               <div className="w-px h-4 bg-gray-300"></div>
 
-              {/* 清除按钮 */}
+              {/* 复制按钮 */}
               <button
-                onClick={clearText}
+                onClick={() => copyToClipboard(currentText)}
                 disabled={!currentText}
                 className="w-7 h-7 rounded flex items-center justify-center hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title="清除"
+                title={isCopied ? "已复制" : "复制"}
               >
-                <Eraser size={13} className="text-gray-600" />
+                {isCopied ? (
+                  <Check size={13} className="text-gray-600" />
+                ) : (
+                  <Copy size={13} className="text-gray-600" />
+                )}
               </button>
 
               {/* 保存按钮 */}
@@ -305,7 +389,14 @@ function App() {
 
           {/* 文本显示区域 - 可编辑 */}
           <div className="relative">
-            <div className="bg-gray-50 rounded-lg relative group">
+            <div 
+              className="bg-gray-50 rounded-lg relative group"
+              onWheel={handleWheelSwipe}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+            >
               <textarea
                 value={currentText}
                 onChange={(e) => setCurrentText(e.target.value)}
@@ -313,25 +404,13 @@ function App() {
                 className="w-full text-sm text-gray-700 bg-transparent resize-none border-none outline-none p-3 min-h-[84px] max-h-32 overflow-y-auto placeholder-gray-400"
                 style={{ lineHeight: '1.5rem' }}
               />
-              {/* 复制按钮 - hover时显示 */}
-              {currentText && (
-                <button
-                  onClick={() => copyToClipboard(currentText)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded bg-white shadow-sm hover:bg-gray-50"
-                  title={isCopied ? "已复制" : "复制文本"}
-                >
-                  {isCopied ? (
-                    <Check size={14} className="text-gray-500" />
-                  ) : (
-                    <Copy size={14} className="text-gray-500" />
-                  )}
-                </button>
-              )}
             </div>
             
             {/* 模式切换器 - SwiftUI风格 */}
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full pt-3">
-              <div className="flex items-center space-x-3">
+            <div 
+              className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full pt-3"
+            >
+              <div className="flex items-center space-x-3 select-none">
                 {/* 覆盖模式指示器 */}
                 <div 
                   onClick={() => setTranscriptionMode('replace')}
@@ -387,22 +466,37 @@ function App() {
               {pinnedItems.slice(0, 5).map((item) => (
                 <div
                   key={item.id}
-                  className="bg-gray-50 rounded-lg px-3 py-2 group flex items-center justify-between hover:bg-gray-100 transition-colors"
+                  className="bg-gray-50 rounded-lg px-3 py-2 group flex items-center justify-between hover:bg-gray-100 transition-colors cursor-pointer"
+                  onClick={() => copyToClipboard(item.text, item.id)}
                 >
                   <p 
-                    className="text-sm text-gray-600 truncate cursor-pointer flex-1 mr-3"
-                    onClick={() => copyToClipboard(item.text)}
-                    title={item.text}
+                    className="text-sm text-gray-600 truncate flex-1 mr-3"
                   >
                     {item.text}
                   </p>
-                  <button
-                    onClick={() => removePinned(item.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-gray-600"
-                    title="取消置顶"
-                  >
-                    <X size={12} />
-                  </button>
+                  <div className="flex items-center">
+                    {/* 复制状态指示器 */}
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400">
+                      {copiedItems.has(item.id) ? (
+                        <Check size={12} className="text-green-500" />
+                      ) : (
+                        <Copy size={12} />
+                      )}
+                    </div>
+                    {/* 取消置顶按钮 - 只在非hover复制状态时显示 */}
+                    {!copiedItems.has(item.id) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // 阻止触发复制
+                          removePinned(item.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-gray-600 ml-2"
+                        title="取消置顶"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
