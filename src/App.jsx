@@ -6,7 +6,7 @@ import {
   StopIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import { Copy, Check, Bookmark, X, ArrowUp } from 'lucide-react';
+import { Copy, Check, Bookmark, X, ArrowUp, Trash2 } from 'lucide-react';
 
 function App() {
   const [currentText, setCurrentText] = useState('');
@@ -476,59 +476,62 @@ function App() {
             </div>
           </div>
 
-          {/* 置顶消息列表 - 极简风格 */}
+          {/* 置顶消息列表 - 网格布局 */}
           {pinnedItems.length > 0 && (
-            <div className="space-y-1 max-h-48 overflow-y-auto mt-8">
-              {pinnedItems.slice(0, 5).map((item) => (
+            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto mt-8">
+              {pinnedItems.slice(0, 10).map((item) => (
                 <div
                   key={item.id}
-                  className="bg-gray-50 rounded-lg px-3 py-2 group flex items-center justify-between hover:bg-gray-100 transition-colors"
+                  className="bg-gray-50 rounded-lg px-3 py-2 group relative transition-colors hover:bg-gray-100 min-h-[44px] flex items-center"
                 >
+                  {/* 文字内容 - 非hover状态显示 */}
                   <p 
-                    className="text-sm text-gray-600 truncate flex-1 mr-3 cursor-pointer"
+                    className="text-sm text-gray-600 truncate w-full group-hover:opacity-0 transition-opacity cursor-pointer"
                     onClick={() => copyToClipboard(item.text, item.id)}
                   >
                     {item.text}
                   </p>
-                  <div className="flex items-center space-x-1">
+                  
+                  {/* 按钮组 - hover状态覆盖显示 */}
+                  <div className="absolute inset-0 flex items-center justify-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
                     {/* 填入转写框按钮 */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         fillToTextbox(item.text);
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-blue-500 p-0.5"
+                      className="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors"
                       title={transcriptionMode === 'replace' ? '填入转写框（覆盖）' : '填入转写框（追加）'}
                     >
-                      <ArrowUp size={12} />
+                      <ArrowUp size={14} />
                     </button>
                     
-                    {/* 复制状态指示器 */}
+                    {/* 复制按钮 */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         copyToClipboard(item.text, item.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-gray-600 p-0.5"
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
                       title="复制"
                     >
                       {copiedItems.has(item.id) ? (
-                        <Check size={12} className="text-green-500" />
+                        <Check size={14} className="text-green-500" />
                       ) : (
-                        <Copy size={12} />
+                        <Copy size={14} />
                       )}
                     </button>
 
-                    {/* 取消置顶按钮 */}
+                    {/* 删除按钮 */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         removePinned(item.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-red-500 p-0.5"
-                      title="取消置顶"
+                      className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                      title="删除"
                     >
-                      <X size={12} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
