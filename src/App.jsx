@@ -6,7 +6,7 @@ import {
   StopIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import { Copy, Check, Bookmark, X } from 'lucide-react';
+import { Copy, Check, Bookmark, X, ArrowUp } from 'lucide-react';
 
 function App() {
   const [currentText, setCurrentText] = useState('');
@@ -207,6 +207,23 @@ function App() {
     setPinnedItems(prev => prev.filter(item => item.id !== id));
   };
 
+  // 将置顶内容填入转写框
+  const fillToTextbox = (text) => {
+    if (transcriptionMode === 'replace') {
+      // 覆盖模式：先保存当前内容到历史记录，然后替换
+      if (currentText.trim()) {
+        addToHistory(currentText);
+      }
+      setCurrentText(text);
+    } else {
+      // 追加模式：在现有内容后追加
+      const newText = currentText.trim() 
+        ? currentText + ' ' + text 
+        : text;
+      setCurrentText(newText);
+    }
+  };
+
   const formatTime = (date) => {
     const now = new Date();
     const diff = now - date;
@@ -390,13 +407,14 @@ function App() {
           {/* 文本显示区域 - 可编辑 */}
           <div className="relative">
             <div 
-              className="bg-gray-50 rounded-lg relative group"
+              className="bg-gray-50 rounded-lg"
               onWheel={handleWheelSwipe}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
             >
+              {/* 转写内容 */}
               <textarea
                 value={currentText}
                 onChange={(e) => setCurrentText(e.target.value)}
@@ -404,57 +422,55 @@ function App() {
                 className="w-full text-sm text-gray-700 bg-transparent resize-none border-none outline-none p-3 min-h-[84px] max-h-32 overflow-y-auto placeholder-gray-400"
                 style={{ lineHeight: '1.5rem' }}
               />
-            </div>
-            
-            {/* 模式切换器 - SwiftUI风格 */}
-            <div 
-              className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full pt-3"
-            >
-              <div className="flex items-center space-x-3 select-none">
-                {/* 覆盖模式指示器 */}
-                <div 
-                  onClick={() => setTranscriptionMode('replace')}
-                  className="flex items-center space-x-1.5 cursor-pointer group"
-                >
+              
+              {/* 模式切换器 - 单独一行在内容下方 */}
+              <div className="flex items-center justify-center px-3 pb-3 pt-1">
+                <div className="flex items-center space-x-3 select-none">
+                  {/* 覆盖模式指示器 */}
                   <div 
-                    className={`h-1 rounded-full transition-all duration-300 ease-in-out ${
-                      transcriptionMode === 'replace' 
-                        ? 'w-5 bg-gray-800' 
-                        : 'w-1.5 bg-gray-300'
-                    }`}
-                  />
-                  <span 
-                    className={`text-[10px] font-medium transition-all duration-300 ease-in-out select-none ${
-                      transcriptionMode === 'replace' 
-                        ? 'text-gray-800' 
-                        : 'text-gray-400'
-                    }`}
+                    onClick={() => setTranscriptionMode('replace')}
+                    className="flex items-center space-x-1.5 cursor-pointer group"
                   >
-                    覆盖
-                  </span>
-                </div>
+                    <div 
+                      className={`h-1 rounded-full transition-all duration-300 ease-in-out ${
+                        transcriptionMode === 'replace' 
+                          ? 'w-5 bg-gray-800' 
+                          : 'w-1.5 bg-gray-300'
+                      }`}
+                    />
+                    <span 
+                      className={`text-[10px] font-medium transition-all duration-300 ease-in-out select-none ${
+                        transcriptionMode === 'replace' 
+                          ? 'text-gray-800' 
+                          : 'text-gray-400'
+                      }`}
+                    >
+                      覆盖
+                    </span>
+                  </div>
 
-                {/* 追加模式指示器 */}
-                <div 
-                  onClick={() => setTranscriptionMode('append')}
-                  className="flex items-center space-x-1.5 cursor-pointer group"
-                >
+                  {/* 追加模式指示器 */}
                   <div 
-                    className={`h-1 rounded-full transition-all duration-300 ease-in-out ${
-                      transcriptionMode === 'append' 
-                        ? 'w-5 bg-gray-800' 
-                        : 'w-1.5 bg-gray-300'
-                    }`}
-                  />
-                  <span 
-                    className={`text-[10px] font-medium transition-all duration-300 ease-in-out select-none ${
-                      transcriptionMode === 'append' 
-                        ? 'text-gray-800' 
-                        : 'text-gray-400'
-                    }`}
+                    onClick={() => setTranscriptionMode('append')}
+                    className="flex items-center space-x-1.5 cursor-pointer group"
                   >
-                    追加
-                  </span>
+                    <div 
+                      className={`h-1 rounded-full transition-all duration-300 ease-in-out ${
+                        transcriptionMode === 'append' 
+                          ? 'w-5 bg-gray-800' 
+                          : 'w-1.5 bg-gray-300'
+                      }`}
+                    />
+                    <span 
+                      className={`text-[10px] font-medium transition-all duration-300 ease-in-out select-none ${
+                        transcriptionMode === 'append' 
+                          ? 'text-gray-800' 
+                          : 'text-gray-400'
+                      }`}
+                    >
+                      追加
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -466,36 +482,54 @@ function App() {
               {pinnedItems.slice(0, 5).map((item) => (
                 <div
                   key={item.id}
-                  className="bg-gray-50 rounded-lg px-3 py-2 group flex items-center justify-between hover:bg-gray-100 transition-colors cursor-pointer"
-                  onClick={() => copyToClipboard(item.text, item.id)}
+                  className="bg-gray-50 rounded-lg px-3 py-2 group flex items-center justify-between hover:bg-gray-100 transition-colors"
                 >
                   <p 
-                    className="text-sm text-gray-600 truncate flex-1 mr-3"
+                    className="text-sm text-gray-600 truncate flex-1 mr-3 cursor-pointer"
+                    onClick={() => copyToClipboard(item.text, item.id)}
                   >
                     {item.text}
                   </p>
-                  <div className="flex items-center">
+                  <div className="flex items-center space-x-1">
+                    {/* 填入转写框按钮 */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fillToTextbox(item.text);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-blue-500 p-0.5"
+                      title={transcriptionMode === 'replace' ? '填入转写框（覆盖）' : '填入转写框（追加）'}
+                    >
+                      <ArrowUp size={12} />
+                    </button>
+                    
                     {/* 复制状态指示器 */}
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyToClipboard(item.text, item.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-gray-600 p-0.5"
+                      title="复制"
+                    >
                       {copiedItems.has(item.id) ? (
                         <Check size={12} className="text-green-500" />
                       ) : (
                         <Copy size={12} />
                       )}
-                    </div>
-                    {/* 取消置顶按钮 - 只在非hover复制状态时显示 */}
-                    {!copiedItems.has(item.id) && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation(); // 阻止触发复制
-                          removePinned(item.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-gray-600 ml-2"
-                        title="取消置顶"
-                      >
-                        <X size={12} />
-                      </button>
-                    )}
+                    </button>
+
+                    {/* 取消置顶按钮 */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removePinned(item.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400 hover:text-red-500 p-0.5"
+                      title="取消置顶"
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
                 </div>
               ))}
