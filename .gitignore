@@ -6,3 +6,4 @@ python-service/venv
 *.DS_Store
 *.DS_Store
 dist
+.idea
