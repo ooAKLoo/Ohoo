@@ -15,6 +15,7 @@ const store = new Store('.settings.dat');
 function App() {
   const [currentText, setCurrentText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [pinnedItems, setPinnedItems] = useState([]);
   const [historyItems, setHistoryItems] = useState([]);
   const [showToast, setShowToast] = useState(false);
@@ -153,6 +154,9 @@ function App() {
 
 
   const toggleRecording = async () => {
+    // 转写中时禁止录音操作
+    if (isTranscribing) return;
+    
     if (!isRecording) {
       await startRecording();
     } else {
@@ -218,12 +222,12 @@ function App() {
 
   const transcribeAudio = async (audioBlob) => {
     try {
+      setIsTranscribing(true);
       const formData = new FormData();
       formData.append('file', audioBlob, 'recording.webm');
       formData.append('language', 'auto');
       formData.append('use_itn', 'true');
       
-      showToastMessage('转写中...');
       
       const response = await fetch('http://localhost:8001/transcribe/normal', {
         method: 'POST',
@@ -250,10 +254,10 @@ function App() {
           : result.text;
         setCurrentText(newText);
       }
-      showToastMessage('转写完成');
     } catch (error) {
       console.error('Transcription error:', error);
-      showToastMessage('转写失败');
+    } finally {
+      setIsTranscribing(false);
     }
   };
 
@@ -524,26 +528,32 @@ function App() {
                 {/* 右侧：按钮组 */}
                 <div className="bg-gray-100 rounded-lg px-1 py-0.5 flex items-center space-x-1">
                   {/* 录音按钮 */}
-                  <button
-                    onClick={toggleRecording}
-                    className="relative group"
-                  >
-                    <div className={`w-7 h-7 rounded flex items-center justify-center transition-all duration-300 ${
-                      isRecording 
-                        ? 'bg-red-500 text-white' 
-                        : 'hover:bg-gray-200 text-gray-600'
-                    }`}>
-                      {!isRecording ? (
-                        <MicrophoneIcon className="w-3.5 h-3.5" />
-                      ) : (
-                        <StopIcon className="w-3.5 h-3.5" />
-                      )}
-                    </div>
-                    {/* 录音动画效果 */}
-                    {isRecording && (
-                      <div className="absolute inset-0 rounded bg-red-500 animate-ping opacity-25" />
-                    )}
-                  </button>
+                 {/* 录音按钮 - 简洁版 */}
+<button
+  onClick={toggleRecording}
+  disabled={isTranscribing}
+  className="relative group"
+>
+  <div className={`w-7 h-7 rounded flex items-center justify-center transition-all duration-300 relative ${
+    !isRecording && !isTranscribing
+      ? 'hover:bg-gray-200 text-gray-600'
+      : isRecording 
+        ? 'text-red-500'  // 录音时图标变红
+        : 'text-gray-600'
+  } ${isTranscribing ? 'opacity-50' : ''}`}>
+    {isTranscribing ? (
+      <div className="w-3.5 h-3.5 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+    ) : (
+      <>
+        <MicrophoneIcon className="w-3.5 h-3.5 z-10" />
+        {/* 中心呼吸红点 - 改小 */}
+        {isRecording && (
+          <div className="absolute w-1 h-1 bg-red-500 rounded-full animate-pulse" />
+        )}
+      </>
+    )}
+  </div>
+</button>
 
                   {/* 分隔线 */}
                   <div className="w-px h-4 bg-gray-300"></div>
