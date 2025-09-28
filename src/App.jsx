@@ -113,6 +113,31 @@ function App() {
     };
   }, []);
 
+  // 组件卸载时彻底清理
+  useEffect(() => {
+    return () => {
+      // 停止所有录音
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      
+      // 清理音频流
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
+        });
+        streamRef.current = null;
+      }
+      
+      // 清理音频数据
+      audioChunksRef.current = [];
+      
+      // 清理MediaRecorder引用
+      mediaRecorderRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     // 检查是否在Tauri环境中
     if (window.__TAURI__) {
