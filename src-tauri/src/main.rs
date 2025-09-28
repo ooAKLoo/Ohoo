@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use tauri::State;
 
 struct AppState {
-    sidecar_handle: Mutex<Option<tauri::api::process::CommandChild>>,
+    sidecar_handle: Mutex<Option<(tauri::async_runtime::Receiver<tauri::api::process::CommandEvent>, tauri::api::process::CommandChild)>>,
 }
 
 #[tauri::command]
@@ -30,8 +30,8 @@ async fn start_python_service(_state: State<'_, AppState>) -> Result<String, Str
                 .args(&["--host", "0.0.0.0", "--port", "8001"])
                 .spawn()
             {
-                Ok(child) => {
-                    *handle = Some(child);
+                Ok((receiver, child)) => {
+                    *handle = Some((receiver, child));
                     std::thread::sleep(std::time::Duration::from_secs(5));
                     Ok("Python service started".to_string())
                 }
@@ -47,7 +47,7 @@ async fn start_python_service(_state: State<'_, AppState>) -> Result<String, Str
 async fn stop_python_service(state: State<'_, AppState>) -> Result<String, String> {
     let mut handle = state.sidecar_handle.lock().unwrap();
     
-    if let Some(child) = handle.take() {
+    if let Some((_, mut child)) = handle.take() {
         match child.kill() {
             Ok(_) => Ok("Python service stopped".to_string()),
             Err(e) => Err(format!("Failed to stop service: {}", e))
