@@ -281,9 +281,11 @@ function App() {
 
   const pinCurrentText = () => {
     if (currentText.trim()) {
+      // 限制为30个字符
+      const truncatedText = currentText.trim().slice(0, 30);
       const newItem = {
         id: Date.now(),
-        text: currentText.trim(),
+        text: truncatedText,
         timestamp: new Date()
       };
       
@@ -292,12 +294,10 @@ function App() {
         // 检查是否已存在相同文本
         const isDuplicate = prev.some(item => item.text === newItem.text);
         if (isDuplicate) {
-          showToastMessage('内容已存在');
           return prev;
         }
         
         const updated = [newItem, ...prev];
-        showToastMessage('已保存');
         return updated.length > 10 ? updated.slice(0, 10) : updated;
       });
     }
@@ -627,72 +627,74 @@ function App() {
                 </div>
               </div>
 
-              {/* 置顶内容带装饰 */}
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                {pinnedItems.slice(0, 10).map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="rounded-lg px-3 py-2 group relative transition-colors hover:bg-gray-100 min-h-[44px] flex items-center overflow-hidden"
-                    style={{ backgroundColor: '#F5F5F5' }}
-                  >
-                    {/* 左上角爱马仕橙色小圆点 */}
-                    <div 
-                      className="absolute top-2 left-2 w-2 h-2 rounded-full"
-                      style={{ backgroundColor: '#FF6600' }}
-                    ></div>
-                    
-                    {/* 文字内容 - 非hover状态显示，向右偏移避开圆点 */}
-                    <p 
-                      className="text-xs font-medium text-gray-500 truncate w-full group-hover:opacity-0 transition-opacity cursor-pointer ml-3 leading-relaxed"
-                      onClick={() => copyToClipboard(item.text, item.id)}
+              {/* 置顶内容 - Flow Layout */}
+              <div className="max-h-48 overflow-y-auto">
+                <div className="flex flex-wrap gap-2">
+                  {pinnedItems.slice(0, 10).map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="inline-flex items-center rounded-full px-3 py-1.5 group relative transition-all duration-200 hover:bg-gray-100 cursor-pointer"
+                      style={{ backgroundColor: '#F5F5F5' }}
                     >
-                      {item.text}
-                    </p>
-                    
-                    {/* 按钮组 - hover状态覆盖显示 */}
-                    <div className="absolute inset-0 flex items-center justify-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* 填入转写框按钮 */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          fillToTextbox(item.text);
-                        }}
-                        className="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors"
-                        title={transcriptionMode === 'replace' ? '填入转写框（覆盖）' : '填入转写框（追加）'}
-                      >
-                        <ArrowUp size={14} />
-                      </button>
+                      {/* 左侧小圆点 */}
+                      <div 
+                        className="w-1.5 h-1.5 rounded-full mr-2 flex-shrink-0"
+                        style={{ backgroundColor: '#FF6600' }}
+                      ></div>
                       
-                      {/* 复制按钮 */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(item.text, item.id);
-                        }}
-                        className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
-                        title="复制"
+                      {/* 文字内容 */}
+                      <span 
+                        className="text-xs font-medium text-gray-600 group-hover:opacity-0 transition-opacity whitespace-nowrap"
+                        onClick={() => copyToClipboard(item.text, item.id)}
                       >
-                        {copiedItems.has(item.id) ? (
-                          <Check size={14} className="text-green-500" />
-                        ) : (
-                          <Copy size={14} />
-                        )}
-                      </button>
+                        {item.text}
+                      </span>
+                      
+                      {/* 按钮组 - hover状态覆盖显示 */}
+                      <div className="absolute inset-0 flex items-center justify-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full border border-gray-200">
+                        {/* 填入转写框按钮 */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fillToTextbox(item.text);
+                          }}
+                          className="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors"
+                          title={transcriptionMode === 'replace' ? '填入转写框（覆盖）' : '填入转写框（追加）'}
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        
+                        {/* 复制按钮 */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(item.text, item.id);
+                          }}
+                          className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+                          title="复制"
+                        >
+                          {copiedItems.has(item.id) ? (
+                            <Check size={12} className="text-green-500" />
+                          ) : (
+                            <Copy size={12} />
+                          )}
+                        </button>
 
-                      {/* 删除按钮 */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removePinned(item.id);
-                        }}
-                        className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
-                        title="删除"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        {/* 删除按钮 */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removePinned(item.id);
+                          }}
+                          className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                          title="删除"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </>
           )}
