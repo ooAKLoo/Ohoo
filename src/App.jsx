@@ -6,7 +6,7 @@ import {
   StopIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
-import { Copy, Check, Bookmark, X, ArrowUp, Trash2 } from 'lucide-react';
+import { Copy, Check, Bookmark, X, ArrowUp, Trash2, LayoutGrid } from 'lucide-react';
 
 function App() {
   const [currentText, setCurrentText] = useState('');
@@ -224,17 +224,6 @@ function App() {
     }
   };
 
-  const formatTime = (date) => {
-    const now = new Date();
-    const diff = now - date;
-    const minutes = Math.floor(diff / 60000);
-    
-    if (minutes < 1) return '刚刚';
-    if (minutes < 60) return `${minutes}分钟前`;
-    
-    return date.toLocaleTimeString().slice(0, 5);
-  };
-
   // 处理滑动手势
   const handleTouchStart = useCallback((e) => {
     swipeStartX.current = e.touches[0].clientX;
@@ -308,123 +297,73 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-white flex flex-col">
+    <div className="h-screen w-screen flex flex-col">
       {/* 主内容区 - 直接铺满窗口 */}
       <div className="flex-1 p-4 space-y-4">
-          {/* 顶部操作区域 */}
-          <div className="flex items-center gap-4">
-            {/* 左侧：历史消息胶囊区域 */}
-            <div className="flex-1 min-w-0 relative">
-              <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide pr-8">
-                {historyItems.length === 0 ? (
-                  <span className="text-xs text-gray-400 px-3 py-1.5">暂无历史记录</span>
-                ) : (
-                  historyItems.slice(0, 4).map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="relative flex-shrink-0"
-                    onMouseEnter={() => setHoveredBubble(item.id)}
-                    onMouseLeave={() => setHoveredBubble(null)}
-                  >
-                    <div 
-                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-xs text-gray-700 cursor-pointer transition-colors whitespace-nowrap"
-                      onClick={() => selectHistoryItem(item.text)}
-                      title={item.text}
-                    >
-                      {item.text.length > 6 ? item.text.slice(0, 6) + '...' : item.text}
-                    </div>
-                    
-                    {/* 悬浮提示框 */}
-                    {hoveredBubble === item.id && (
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg max-w-48 z-50">
-                        <div className="line-clamp-3">{item.text}</div>
-                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
-                      </div>
-                    )}
-                  </div>
-                  ))
-                )}
-              </div>
-              {/* 右侧渐变虚化效果 */}
-              {historyItems.length > 0 && (
-                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none"></div>
-              )}
-            </div>
-
-            {/* 右侧：按钮组 */}
-            <div className="bg-gray-100 rounded-lg px-1 py-0.5 flex items-center space-x-1 flex-shrink-0">
-              {/* 录音按钮 */}
-              <button
-                onClick={toggleRecording}
-                className="relative group"
-              >
-                <div className={`w-7 h-7 rounded flex items-center justify-center transition-all duration-300 ${
-                  isRecording 
-                    ? 'bg-red-500 text-white' 
-                    : 'hover:bg-gray-200 text-gray-600'
-                }`}>
-                  {!isRecording ? (
-                    <MicrophoneIcon className="w-3.5 h-3.5" />
-                  ) : (
-                    <StopIcon className="w-3.5 h-3.5" />
-                  )}
-                </div>
-                {/* 录音动画效果 */}
-                {isRecording && (
-                  <div className="absolute inset-0 rounded bg-red-500 animate-ping opacity-25" />
-                )}
-              </button>
-
-              {/* 分隔线 */}
-              <div className="w-px h-4 bg-gray-300"></div>
-
-              {/* 复制按钮 */}
-              <button
-                onClick={() => copyToClipboard(currentText)}
-                disabled={!currentText}
-                className="w-7 h-7 rounded flex items-center justify-center hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title={isCopied ? "已复制" : "复制"}
-              >
-                {isCopied ? (
-                  <Check size={13} className="text-gray-600" />
-                ) : (
-                  <Copy size={13} className="text-gray-600" />
-                )}
-              </button>
-
-              {/* 保存按钮 */}
-              <button
-                onClick={pinCurrentText}
-                disabled={!currentText}
-                className="w-7 h-7 rounded flex items-center justify-center hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title="保存"
-              >
-                <Bookmark size={13} className="text-gray-600" />
-              </button>
-            </div>
-          </div>
-
           {/* 文本显示区域 - 可编辑 */}
-          <div className="relative">
+          <div className="relative rounded-2xl">
             <div 
-              className="bg-gray-50 rounded-lg"
+              className="rounded-lg"
+              style={{ backgroundColor: '#F5F5F5' }}
               onWheel={handleWheelSwipe}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
             >
+              {/* 历史记录胶囊区域 */}
+              <div className="relative px-3 pt-3 pb-2 rounded-t-lg">
+                <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide">
+                  {historyItems.length === 0 ? (
+                    <span className="text-xs text-gray-400 px-3 py-1.5">暂无历史记录</span>
+                  ) : (
+                    historyItems.slice(0, 4).map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="relative flex-shrink-0"
+                      onMouseEnter={() => setHoveredBubble(item.id)}
+                      onMouseLeave={() => setHoveredBubble(null)}
+                    >
+                      <div 
+                        className="px-3 py-1.5 border border-dashed border-gray-300 hover:border-transparent hover:bg-blue-50 rounded-full text-xs text-gray-600 hover:text-blue-700 cursor-pointer transition-all whitespace-nowrap"
+                        onClick={() => selectHistoryItem(item.text)}
+                        title={item.text}
+                      >
+                        {item.text.length > 6 ? item.text.slice(0, 6) + '...' : item.text}
+                      </div>
+                      
+                      {/* 悬浮提示框 */}
+                      {hoveredBubble === item.id && (
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg max-w-48 z-50">
+                          <div className="line-clamp-3">{item.text}</div>
+                        </div>
+                      )}
+                    </div>
+                    ))
+                  )}
+                </div>
+                
+                {/* 左右渐变虚化效果 */}
+                {historyItems.length > 0 && (
+                  <>
+                    <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#F5F5F5] to-transparent pointer-events-none rounded-lg"></div>
+                    <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#F5F5F5] to-transparent pointer-events-none rounded-lg"></div>
+                  </>
+                )}
+              </div>
+
               {/* 转写内容 */}
               <textarea
                 value={currentText}
                 onChange={(e) => setCurrentText(e.target.value)}
                 placeholder="点击录音按钮开始转写"
-                className="w-full text-sm text-gray-700 bg-transparent resize-none border-none outline-none p-3 min-h-[84px] max-h-32 overflow-y-auto placeholder-gray-400"
+                className="w-full text-sm text-gray-700 bg-transparent resize-none border-none outline-none px-3 pt-1 pb-3 min-h-[84px] max-h-32 overflow-y-auto placeholder-gray-400"
                 style={{ lineHeight: '1.5rem' }}
               />
               
-              {/* 模式切换器 - 单独一行在内容下方 */}
-              <div className="flex items-center justify-center px-3 pb-3 pt-1">
+              {/* 底部工具栏 - 模式切换器在左边，按钮组在右边 */}
+              <div className="flex items-center justify-between px-3 pb-3 pt-1">
+                {/* 左侧：模式切换器 */}
                 <div className="flex items-center space-x-3 select-none">
                   {/* 覆盖模式指示器 */}
                   <div 
@@ -472,71 +411,157 @@ function App() {
                     </span>
                   </div>
                 </div>
+
+                {/* 右侧：按钮组 */}
+                <div className="bg-gray-100 rounded-lg px-1 py-0.5 flex items-center space-x-1">
+                  {/* 录音按钮 */}
+                  <button
+                    onClick={toggleRecording}
+                    className="relative group"
+                  >
+                    <div className={`w-7 h-7 rounded flex items-center justify-center transition-all duration-300 ${
+                      isRecording 
+                        ? 'bg-red-500 text-white' 
+                        : 'hover:bg-gray-200 text-gray-600'
+                    }`}>
+                      {!isRecording ? (
+                        <MicrophoneIcon className="w-3.5 h-3.5" />
+                      ) : (
+                        <StopIcon className="w-3.5 h-3.5" />
+                      )}
+                    </div>
+                    {/* 录音动画效果 */}
+                    {isRecording && (
+                      <div className="absolute inset-0 rounded bg-red-500 animate-ping opacity-25" />
+                    )}
+                  </button>
+
+                  {/* 分隔线 */}
+                  <div className="w-px h-4 bg-gray-300"></div>
+
+                  {/* 复制按钮 */}
+                  <button
+                    onClick={() => copyToClipboard(currentText)}
+                    disabled={!currentText}
+                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title={isCopied ? "已复制" : "复制"}
+                  >
+                    {isCopied ? (
+                      <Check size={13} className="text-gray-600" />
+                    ) : (
+                      <Copy size={13} className="text-gray-600" />
+                    )}
+                  </button>
+
+                  {/* 保存按钮 */}
+                  <button
+                    onClick={pinCurrentText}
+                    disabled={!currentText}
+                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="保存"
+                  >
+                    <Bookmark size={13} className="text-gray-600" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* 置顶消息列表 - 网格布局 */}
+          {/* 置顶消息列表 - 带优雅装饰 */}
           {pinnedItems.length > 0 && (
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto mt-8">
-              {pinnedItems.slice(0, 10).map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-gray-50 rounded-lg px-3 py-2 group relative transition-colors hover:bg-gray-100 min-h-[44px] flex items-center"
-                >
-                  {/* 文字内容 - 非hover状态显示 */}
-                  <p 
-                    className="text-sm text-gray-600 truncate w-full group-hover:opacity-0 transition-opacity cursor-pointer"
-                    onClick={() => copyToClipboard(item.text, item.id)}
-                  >
-                    {item.text}
-                  </p>
-                  
-                  {/* 按钮组 - hover状态覆盖显示 */}
-                  <div className="absolute inset-0 flex items-center justify-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* 填入转写框按钮 */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        fillToTextbox(item.text);
-                      }}
-                      className="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors"
-                      title={transcriptionMode === 'replace' ? '填入转写框（覆盖）' : '填入转写框（追加）'}
-                    >
-                      <ArrowUp size={14} />
-                    </button>
-                    
-                    {/* 复制按钮 */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(item.text, item.id);
-                      }}
-                      className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
-                      title="复制"
-                    >
-                      {copiedItems.has(item.id) ? (
-                        <Check size={14} className="text-green-500" />
-                      ) : (
-                        <Copy size={14} />
-                      )}
-                    </button>
-
-                    {/* 删除按钮 */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removePinned(item.id);
-                      }}
-                      className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+            <>
+              {/* 优雅的过渡装饰 */}
+              <div className="flex items-center justify-between mt-6 mb-3">
+                {/* 左侧装饰 */}
+                <div className="flex items-center space-x-1.5">
+                  <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-300">
+                    <rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor" opacity="0.6"/>
+                    <rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor" opacity="0.4"/>
+                    <rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor" opacity="0.4"/>
+                    <rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor" opacity="0.2"/>
+                  </svg>
+                </div>
+                
+                {/* 右侧计数 */}
+                <div className="flex items-center space-x-1">
+                  <span className="text-[10px] text-gray-400">{pinnedItems.length}</span>
+                  <div className="w-3 h-3">
+                    <svg viewBox="0 0 12 12" className="text-gray-300">
+                      <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3"/>
+                      <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray={`${(pinnedItems.length/10) * 31.4} 31.4`} transform="rotate(-90 6 6)" opacity="0.8"/>
+                    </svg>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+
+              {/* 置顶内容带装饰 */}
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                {pinnedItems.slice(0, 10).map((item, index) => (
+                  <div
+                    key={item.id}
+                    className="rounded-lg px-3 py-2 group relative transition-colors hover:bg-gray-100 min-h-[44px] flex items-center overflow-hidden"
+                    style={{ backgroundColor: '#F5F5F5' }}
+                  >
+                    {/* 左上角爱马仕橙色小圆点 */}
+                    <div 
+                      className="absolute top-2 left-2 w-2 h-2 rounded-full"
+                      style={{ backgroundColor: '#FF6600' }}
+                    ></div>
+                    
+                    {/* 文字内容 - 非hover状态显示，向右偏移避开圆点 */}
+                    <p 
+                      className="text-xs font-medium text-gray-500 truncate w-full group-hover:opacity-0 transition-opacity cursor-pointer ml-3 leading-relaxed"
+                      onClick={() => copyToClipboard(item.text, item.id)}
+                    >
+                      {item.text}
+                    </p>
+                    
+                    {/* 按钮组 - hover状态覆盖显示 */}
+                    <div className="absolute inset-0 flex items-center justify-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* 填入转写框按钮 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fillToTextbox(item.text);
+                        }}
+                        className="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors"
+                        title={transcriptionMode === 'replace' ? '填入转写框（覆盖）' : '填入转写框（追加）'}
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      
+                      {/* 复制按钮 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyToClipboard(item.text, item.id);
+                        }}
+                        className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+                        title="复制"
+                      >
+                        {copiedItems.has(item.id) ? (
+                          <Check size={14} className="text-green-500" />
+                        ) : (
+                          <Copy size={14} />
+                        )}
+                      </button>
+
+                      {/* 删除按钮 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePinned(item.id);
+                        }}
+                        className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                        title="删除"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
