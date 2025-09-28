@@ -139,8 +139,8 @@ function App() {
     try {
       let stream = streamRef.current;
       
-      // 如果没有预热的流，则新建
-      if (!stream) {
+      // 检查流状态并重新获取或启用
+      if (!stream || stream.getTracks()[0].readyState === 'ended') {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
       } else {
@@ -148,29 +148,32 @@ function App() {
         stream.getTracks().forEach(track => track.enabled = true);
       }
       
-      // 立即创建并启动 MediaRecorder
-      mediaRecorderRef.current = new MediaRecorder(stream, { 
-        mimeType: 'audio/webm',
-        audioBitsPerSecond: 128000
-      });
+      // 复用或创建 MediaRecorder
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        mediaRecorderRef.current = new MediaRecorder(stream, { 
+          mimeType: 'audio/webm',
+          audioBitsPerSecond: 128000
+        });
+        
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+        
+        mediaRecorderRef.current.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          audioChunksRef.current = []; // 立即清空
+          await transcribeAudio(audioBlob);
+          // 停止后重新静音但保持流
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.enabled = false);
+          }
+        };
+      }
       
+      // 清空音频数据准备新录音
       audioChunksRef.current = [];
-      
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-      
-      mediaRecorderRef.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await transcribeAudio(audioBlob);
-        // 停止后重新静音但保持流
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.enabled = false);
-        }
-      };
-      
       // 使用 timeslice 参数，每100ms获取一次数据
       mediaRecorderRef.current.start(100);
       setIsRecording(true);
