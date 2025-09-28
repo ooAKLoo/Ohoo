@@ -28,6 +28,7 @@ function App() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const swipeStartX = useRef(null);
+  const streamRef = useRef(null);
 
   // 添加到历史记录的辅助函数，带去重检查
   const addToHistory = (text) => {
@@ -89,6 +90,29 @@ function App() {
     }
   }, [pinnedItems]);
 
+  // 预热麦克风
+  useEffect(() => {
+    const initMicrophone = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        // 静音所有轨道但保持连接
+        stream.getTracks().forEach(track => track.enabled = false);
+      } catch (error) {
+        console.log('Microphone pre-init failed:', error);
+      }
+    };
+    
+    initMicrophone();
+    
+    return () => {
+      // 清理
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
   useEffect(() => {
     // 检查是否在Tauri环境中
     if (window.__TAURI__) {
@@ -113,22 +137,44 @@ function App() {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      let stream = streamRef.current;
+      
+      // 如果没有预热的流，则新建
+      if (!stream) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+      } else {
+        // 启用音频轨道
+        stream.getTracks().forEach(track => track.enabled = true);
+      }
+      
+      // 立即创建并启动 MediaRecorder
+      mediaRecorderRef.current = new MediaRecorder(stream, { 
+        mimeType: 'audio/webm',
+        audioBitsPerSecond: 128000
+      });
+      
       audioChunksRef.current = [];
       
       mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
       
       mediaRecorderRef.current.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         await transcribeAudio(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
+        // 停止后重新静音但保持流
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.enabled = false);
+        }
       };
       
-      mediaRecorderRef.current.start();
+      // 使用 timeslice 参数，每100ms获取一次数据
+      mediaRecorderRef.current.start(100);
       setIsRecording(true);
+      
     } catch (error) {
       console.error('Error accessing microphone:', error);
       showToastMessage('无法访问麦克风');
