@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { appWindow } from '@tauri-apps/api/window';
+import { Store } from 'tauri-plugin-store-api';
 import { 
   MicrophoneIcon, 
   StopIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import { Copy, Check, Bookmark, X, ArrowUp, Trash2, LayoutGrid } from 'lucide-react';
+
+// 在组件外部创建 store 实例
+const store = new Store('.settings.dat');
 
 function App() {
   const [currentText, setCurrentText] = useState('');
@@ -53,6 +57,37 @@ function App() {
     }
     setCurrentText(text);
   };
+
+  // 从Tauri Store加载置顶内容
+  useEffect(() => {
+    const loadPinnedItems = async () => {
+      try {
+        const saved = await store.get('pinnedItems');
+        if (saved) {
+          setPinnedItems(saved);
+        }
+      } catch (error) {
+        console.error('Failed to load pinned items:', error);
+      }
+    };
+    loadPinnedItems();
+  }, []);
+
+  // 保存置顶内容到Tauri Store
+  useEffect(() => {
+    const savePinnedItems = async () => {
+      try {
+        await store.set('pinnedItems', pinnedItems);
+        await store.save(); // 确保立即保存到磁盘
+      } catch (error) {
+        console.error('Failed to save pinned items:', error);
+      }
+    };
+    
+    if (pinnedItems.length >= 0) {
+      savePinnedItems();
+    }
+  }, [pinnedItems]);
 
   useEffect(() => {
     // 检查是否在Tauri环境中

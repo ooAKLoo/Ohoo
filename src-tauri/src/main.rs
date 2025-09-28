@@ -62,6 +62,7 @@ fn main() {
         .manage(AppState {
             sidecar_handle: Mutex::new(None),
         })
+        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             start_python_service, 
             stop_python_service
