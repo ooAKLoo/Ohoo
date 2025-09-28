@@ -95,7 +95,14 @@ function App() {
   useEffect(() => {
     const initMicrophone = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 16000  // SenseVoice优化的采样率
+          } 
+        });
         streamRef.current = stream;
         // 静音所有轨道但保持连接
         stream.getTracks().forEach(track => track.enabled = false);
@@ -170,7 +177,14 @@ function App() {
       
       // 检查流状态并重新获取或启用
       if (!stream || stream.getTracks()[0].readyState === 'ended') {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 16000
+          } 
+        });
         streamRef.current = stream;
       } else {
         // 启用音频轨道
@@ -181,7 +195,7 @@ function App() {
       if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
         mediaRecorderRef.current = new MediaRecorder(stream, { 
           mimeType: 'audio/webm',
-          audioBitsPerSecond: 128000
+          audioBitsPerSecond: 256000  // 提高到256kbps，提升音质
         });
         
         mediaRecorderRef.current.ondataavailable = (event) => {

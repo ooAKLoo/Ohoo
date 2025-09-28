@@ -81,9 +81,14 @@ def init_model():
             model="iic/SenseVoiceSmall",
             trust_remote_code=True,
             vad_model="fsmn-vad",
-            vad_kwargs={"max_single_segment_time": 30000},
+            vad_kwargs={
+                "max_single_segment_time": 20000,  # 降低到20秒提高分段精度
+                "max_single_segment_time_s": 20,   # 添加秒为单位的参数
+                "speech_noise_threshold": 0.8,     # 添加语音噪声阈值
+            },
             device=device,
             disable_update=True,
+            ban_emo_unk=True,  # 保持情感识别能力
         )
         
         load_time = time.time() - start_time
@@ -172,11 +177,12 @@ async def transcribe_normal(
                 res = model.generate(
                     input=tmp_path,
                     cache={},
-                    language=language,
+                    language=language,  # 使用原始语言参数
                     use_itn=use_itn,
-                    batch_size_s=60,
+                    batch_size_s=40,      # 保持优化的批处理大小
                     merge_vad=True,
-                    merge_length_s=15,
+                    merge_length_s=10,    # 保持优化的合并策略
+                    ban_emo_unk=True,     # 保持情感标签优化
                 )
 
             if res and len(res) > 0:
