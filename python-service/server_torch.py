@@ -13,24 +13,15 @@ from contextlib import asynccontextmanager
 # 强制刷新输出缓冲区
 sys.stdout.reconfigure(line_buffering=True)
 
-# Nuitka/PyInstaller 补丁 - 必须放在 funasr 导入之前
+# PyInstaller 补丁 - 必须放在 funasr 导入之前
 if getattr(sys, 'frozen', False):
     # 创建缺失的 version.txt
-    # 支持 Nuitka 和 PyInstaller 的不同路径
-    if hasattr(sys, '_MEIPASS'):
-        # PyInstaller 路径
-        base_dir = sys._MEIPASS
-    else:
-        # Nuitka 路径（通常是可执行文件所在目录）
-        base_dir = os.path.dirname(sys.executable)
-    
-    funasr_dir = os.path.join(base_dir, 'funasr')
+    funasr_dir = os.path.join(sys._MEIPASS, 'funasr')
     os.makedirs(funasr_dir, exist_ok=True)
     version_file = os.path.join(funasr_dir, 'version.txt')
     if not os.path.exists(version_file):
         with open(version_file, 'w') as f:
             f.write('1.2.7')
-        print(f"✅ 创建 funasr version.txt: {version_file}", flush=True)
 
 # 设置日志输出到文件（用于调试 Tauri sidecar）
 def setup_logging():
@@ -93,27 +84,8 @@ if getattr(sys, 'frozen', False):
 import torch
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-
-try:
-    from funasr_onnx import SenseVoiceSmall as ONNXSenseVoiceSmall
-    ONNX_AVAILABLE = True
-    print("✅ ONNX 运行时可用", flush=True)
-except ImportError:
-    ONNX_AVAILABLE = False
-    print("⚠️ ONNX 不可用，使用 PyTorch", flush=True)
-
 from funasr import AutoModel
 from funasr.utils.postprocess_utils import rich_transcription_postprocess
-
-# 中文ITN处理
-try:
-    from chinese_itn import chinese_to_num
-    ITN_AVAILABLE = True
-    print("✅ 中文ITN库加载成功", flush=True)
-except ImportError:
-    chinese_to_num = None
-    ITN_AVAILABLE = False
-    print("⚠️ 中文ITN库不可用，跳过数字标准化", flush=True)
 
 # 配置日志
 logging.basicConfig(
@@ -236,33 +208,19 @@ def init_model():
         import sys
         
         try:
-            # 只使用 ONNX 模型
-            print("🚀 使用 ONNX 加速模型", flush=True)
-            
-            # 检查ONNX模型路径（嵌套目录）
-            onnx_model_path = models_path / "models" / "iic" / "SenseVoiceSmall"
-            onnx_quant_path = onnx_model_path / "model_quant.onnx"
-            
-            # ONNX模型会自动处理ITN，无需额外配置文件
-            
-            if onnx_quant_path.exists():
-                print(f"🔥 使用量化ONNX模型: {onnx_model_path}", flush=True)
-                model = ONNXSenseVoiceSmall(
-                    str(onnx_model_path),
-                    quantize=True,
-                    device="cuda" if torch.cuda.is_available() else "cpu"
-                )
-            else:
-                # 标准ONNX模型
-                onnx_path = onnx_model_path / "model.onnx"
-                print(f"⚡ 使用标准ONNX模型: {onnx_model_path}", flush=True)
-                model = ONNXSenseVoiceSmall(
-                    str(onnx_model_path),
-                    quantize=False,
-                    device="cuda" if torch.cuda.is_available() else "cpu"
-                )
-            
-            print("✅ ONNX模型加载完成", flush=True)
+            model = AutoModel(
+                model=model_name,
+                trust_remote_code=True,  # 改为True，funasr 模型可能需要动态加载代码
+                vad_model=vad_model_name,
+                vad_kwargs={
+                    "max_single_segment_time": 20000,  # 降低到20秒提高分段精度
+                    "max_single_segment_time_s": 20,   # 添加秒为单位的参数
+                    "speech_noise_threshold": 0.8,     # 添加语音噪声阈值
+                },
+                device=device,
+                disable_update=True,
+                ban_emo_unk=True,  # 保持情感识别能力
+            )
             
             load_time = time.time() - start_time
             print(f"⏱️  模型加载完成！耗时: {load_time:.2f} 秒", flush=True)
@@ -296,8 +254,8 @@ def init_model():
             
             raise
 
-        # 模型推理优化（ONNX模型无需此操作）
-        if hasattr(model, 'model') and hasattr(model.model, 'eval'):
+        # 模型推理优化
+        if hasattr(model.model, 'eval'):
             model.model.eval()
         
         print("=" * 70, flush=True)
@@ -374,38 +332,33 @@ async def transcribe_normal(
         background_tasks.add_task(cleanup_temp_file, tmp_path)
 
         try:
-            # 使用ONNX模型推理
-            print("🚀 使用ONNX快速推理", flush=True)
-            res = model(
-                tmp_path,
-                language=language if language != "auto" else "auto",
-                use_itn=True  # 关闭ONNX内置ITN，使用我们的中文ITN库
-            )
-            
+            # 使用torch.no_grad()减少内存占用
+            with torch.no_grad():
+                res = model.generate(
+                    input=tmp_path,
+                    cache={},
+                    language=language,  # 使用原始语言参数
+                    use_itn=use_itn,
+                    batch_size_s=40,      # 保持优化的批处理大小
+                    merge_vad=True,
+                    merge_length_s=10,    # 保持优化的合并策略
+                    ban_emo_unk=True,     # 保持情感标签优化
+                )
+
             if res and len(res) > 0:
-                # ONNX 返回格式处理
-                if isinstance(res[0], dict) and "text" in res[0]:
-                    raw_text = res[0]["text"]
-                else:
-                    raw_text = str(res[0])
+                text = rich_transcription_postprocess(res[0]["text"])
                 
-                # 使用相同的后处理函数
-                text = rich_transcription_postprocess(raw_text)
-                
-                # 使用中文ITN处理数字标准化
-                if ITN_AVAILABLE and use_itn:
-                    original_text = text
-                    text = chinese_to_num(text)
-                    if text != original_text:
-                        print(f"🔢 ITN处理: {original_text} -> {text}", flush=True)
-                
+                # 主动清理GPU内存
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    
                 return {
                     "text": text,
                     "filename": file.filename,
                     "language": language
                 }
             else:
-                raise HTTPException(status_code=500, detail="ONNX推理无结果")
+                raise HTTPException(status_code=500, detail="No transcription result")
 
         except FileNotFoundError as e:
             logger.error(f"📁 临时文件未找到: {tmp_path}, 错误: {e}")

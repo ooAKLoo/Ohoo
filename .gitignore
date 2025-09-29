@@ -12,3 +12,4 @@ src-tauri/binaries
 python-service/__pycache__
 python-service/models
 Release
+python-service/dist_nuitka

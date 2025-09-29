@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-SenseVoice服务器打包脚本
-将Python服务器打包为独立可执行文件，用于Tauri应用的sidecar
+SenseVoice服务器打包脚本（已弃用）
+请使用 build_nuitka.py 进行优化编译
 """
 
 import subprocess
