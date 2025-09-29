@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
 
 struct AppState {
     sidecar_handle: Mutex<Option<(tauri::async_runtime::Receiver<tauri::api::process::CommandEvent>, tauri::api::process::CommandChild)>>,
@@ -63,6 +63,14 @@ fn main() {
             sidecar_handle: Mutex::new(None),
         })
         .plugin(tauri_plugin_store::Builder::default().build())
+        .setup(|app| {
+            #[cfg(debug_assertions)] // 只在调试构建中包含此代码
+            {
+                let window = app.get_window("main").unwrap();
+                window.open_devtools();
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             start_python_service, 
             stop_python_service

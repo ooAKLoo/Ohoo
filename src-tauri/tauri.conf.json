@@ -19,7 +19,7 @@
         "sidecar": true,
         "scope": [
           {
-            "name": "binaries/sense_voice_server",
+            "name": "sense_voice_server",
             "sidecar": true
           }
         ]
@@ -49,7 +49,7 @@
       "deb": {
         "depends": []
       },
-      "externalBin": [],
+      "externalBin": ["binaries/sense_voice_server"],
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -68,7 +68,7 @@
       },
       "resources": [],
       "shortDescription": "",
-      "targets": "all",
+      "targets": "app",
       "windows": {
         "certificateThumbprint": null,
         "digestAlgorithm": "sha256",

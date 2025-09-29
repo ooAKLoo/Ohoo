@@ -7,3 +7,8 @@ python-service/venv
 *.DS_Store
 dist
 .idea
+python-service/build
+src-tauri/binaries
+python-service/__pycache__
+python-service/models
+Release
