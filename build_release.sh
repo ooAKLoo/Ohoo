@@ -2,6 +2,10 @@
 
 # Ohoo 自动化构建脚本
 # 功能：Python服务打包 + Tauri应用构建 + 发布文件夹准备
+# 
+# 使用方法：
+#   ./build_release.sh              # 使用已有的Python服务包（如果存在）
+#   ./build_release.sh --clean-python  # 强制重新打包Python服务
 
 set -e  # 遇到错误立即退出
 
@@ -45,53 +49,65 @@ if [ -d "Release" ]; then
     log_success "已清理 Release 文件夹"
 fi
 
-if [ -d "python-service/dist" ]; then
-    rm -rf python-service/dist
-    log_success "已清理 Python 服务构建文件"
-fi
-
-if [ -d "python-service/build" ]; then
-    rm -rf python-service/build
-    log_success "已清理 Python 服务临时文件"
+# 只在需要重新打包Python服务时清理
+if [ "$1" == "--clean-python" ]; then
+    if [ -d "python-service/dist" ]; then
+        rm -rf python-service/dist
+        log_success "已清理 Python 服务构建文件"
+    fi
+    
+    if [ -d "python-service/build" ]; then
+        rm -rf python-service/build
+        log_success "已清理 Python 服务临时文件"
+    fi
 fi
 
 # 清理 Tauri 构建缓存 (解决debug版本问题)
 if [ -d "src-tauri/target" ]; then
+    # 先删除可能存在的 .DS_Store 文件
+    find src-tauri/target -name ".DS_Store" -delete 2>/dev/null || true
     rm -rf src-tauri/target
     log_success "已清理 Tauri 构建缓存"
 fi
 
-# 步骤2: 构建Python服务
-log_info "🐍 步骤2: 构建 Python 服务"
-cd python-service
+# 步骤2: 检查或构建Python服务
+log_info "🐍 步骤2: 检查 Python 服务"
 
-# 检查虚拟环境
-if [ ! -d "venv" ]; then
-    log_error "未找到 Python 虚拟环境！请先运行: python -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
-    exit 1
+# 检查是否已存在打包好的Python服务
+if [ -f "python-service/dist/sense_voice_server" ]; then
+    log_success "发现已打包的 Python 服务，跳过重新打包"
+else
+    log_info "未找到已打包的 Python 服务，开始打包..."
+    cd python-service
+
+    # 检查虚拟环境
+    if [ ! -d "venv" ]; then
+        log_error "未找到 Python 虚拟环境！请先运行: python -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+        exit 1
+    fi
+
+    # 激活虚拟环境
+    source venv/bin/activate
+    log_success "已激活 Python 虚拟环境"
+
+    # 检查 PyInstaller
+    if ! command -v pyinstaller &> /dev/null; then
+        log_info "安装 PyInstaller..."
+        pip install pyinstaller
+    fi
+
+    # 打包Python服务
+    log_info "正在打包 Python 服务..."
+    pyinstaller sense_voice_server.spec
+
+    if [ ! -f "dist/sense_voice_server" ]; then
+        log_error "Python 服务打包失败！"
+        exit 1
+    fi
+
+    log_success "Python 服务打包完成"
+    cd ..
 fi
-
-# 激活虚拟环境
-source venv/bin/activate
-log_success "已激活 Python 虚拟环境"
-
-# 检查 PyInstaller
-if ! command -v pyinstaller &> /dev/null; then
-    log_info "安装 PyInstaller..."
-    pip install pyinstaller
-fi
-
-# 打包Python服务
-log_info "正在打包 Python 服务..."
-pyinstaller sense_voice_server.spec
-
-if [ ! -f "dist/sense_voice_server" ]; then
-    log_error "Python 服务打包失败！"
-    exit 1
-fi
-
-log_success "Python 服务打包完成"
-cd ..
 
 # 步骤3: 准备sidecar文件
 log_info "🔗 步骤3: 更新 sidecar 文件"
@@ -214,4 +230,8 @@ echo ""
 log_info "📂 发布文件位置: $(pwd)/Release"
 echo ""
 log_info "✅ 可以将 Release 文件夹打包分发给用户！"
+echo ""
+log_info "💡 提示："
+echo "   - 使用 --clean-python 参数强制重新打包 Python 服务"
+echo "   - Python 服务已嵌入到 Tauri 应用内，用户无需额外配置"
 echo "=================================================="

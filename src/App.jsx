@@ -8,6 +8,7 @@ import {
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import { Copy, Check, Bookmark, X, ArrowUp, Trash2, LayoutGrid } from 'lucide-react';
+import toWav from 'audiobuffer-to-wav';
 
 // 在组件外部创建 store 实例
 const store = new Store('.settings.dat');
@@ -30,6 +31,25 @@ function App() {
   const audioChunksRef = useRef([]);
   const swipeStartX = useRef(null);
   const streamRef = useRef(null);
+  const currentMimeTypeRef = useRef('audio/wav'); // 保存当前使用的格式
+
+  // 音频转换函数：将 webm 转换为 WAV
+  const convertToWav = async (webmBlob) => {
+    try {
+      console.log('开始转换音频格式 webm -> wav');
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const arrayBuffer = await webmBlob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const wavArrayBuffer = toWav(audioBuffer);
+      const wavBlob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+      console.log(`转换完成: ${webmBlob.size} bytes -> ${wavBlob.size} bytes`);
+      return wavBlob;
+    } catch (error) {
+      console.error('音频转换失败:', error);
+      // 转换失败时返回原始 blob
+      return webmBlob;
+    }
+  };
 
   // 添加到历史记录的辅助函数，带去重检查
   const addToHistory = (text) => {
@@ -193,8 +213,13 @@ function App() {
       
       // 复用或创建 MediaRecorder
       if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        // 使用浏览器支持的格式录音，然后转换为 WAV
+        const mimeType = 'audio/webm';  // 浏览器通用支持的格式
+        console.log('录音格式:', mimeType, '-> 将转换为 WAV');
+        currentMimeTypeRef.current = 'audio/wav'; // 最终输出格式
+        
         mediaRecorderRef.current = new MediaRecorder(stream, { 
-          mimeType: 'audio/webm',
+          mimeType: mimeType,
           audioBitsPerSecond: 256000  // 提高到256kbps，提升音质
         });
         
@@ -205,9 +230,12 @@ function App() {
         };
         
         mediaRecorderRef.current.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const webmBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           audioChunksRef.current = []; // 立即清空
-          await transcribeAudio(audioBlob);
+          
+          // 转换为 WAV 格式
+          const wavBlob = await convertToWav(webmBlob);
+          await transcribeAudio(wavBlob);
           // 停止后重新静音但保持流
           if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.enabled = false);
@@ -237,8 +265,9 @@ function App() {
   const transcribeAudio = async (audioBlob) => {
     try {
       setIsTranscribing(true);
+      
       const formData = new FormData();
-      formData.append('file', audioBlob, 'recording.webm');
+      formData.append('file', audioBlob, 'recording.wav');  // 总是使用 WAV 格式
       formData.append('language', 'auto');
       formData.append('use_itn', 'true');
       

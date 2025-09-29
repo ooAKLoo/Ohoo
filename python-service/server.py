@@ -23,6 +23,64 @@ if getattr(sys, 'frozen', False):
         with open(version_file, 'w') as f:
             f.write('1.2.7')
 
+# 设置日志输出到文件（用于调试 Tauri sidecar）
+def setup_logging():
+    """设置日志输出到文件"""
+    from datetime import datetime
+    
+    # 确定日志目录
+    if getattr(sys, 'frozen', False):
+        # 打包后的路径
+        exe_dir = Path(sys.executable).parent
+        if exe_dir.name == "MacOS":
+            # macOS App 包结构，日志放在 App 同级目录
+            log_dir = exe_dir.parent.parent.parent / "logs"
+        else:
+            log_dir = exe_dir / "logs"
+    else:
+        # 开发环境
+        log_dir = Path(__file__).parent / "logs"
+    
+    # 创建日志目录
+    log_dir.mkdir(exist_ok=True)
+    
+    # 日志文件名（带时间戳）
+    log_file = log_dir / f"server_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    # 重定向标准输出和错误
+    class Logger:
+        def __init__(self, filename):
+            self.terminal = sys.stdout
+            self.log = open(filename, "a", encoding='utf-8')
+        
+        def write(self, message):
+            self.terminal.write(message)
+            self.log.write(message)
+            self.log.flush()  # 立即写入磁盘
+        
+        def flush(self):
+            self.terminal.flush()
+            self.log.flush()
+        
+        def isatty(self):
+            return self.terminal.isatty()
+        
+        def fileno(self):
+            return self.terminal.fileno()
+    
+    # 同时输出到控制台和文件
+    sys.stdout = Logger(log_file)
+    sys.stderr = Logger(log_file)
+    
+    print(f"📝 日志文件位置: {log_file}")
+    print("=" * 70)
+    
+    return log_file
+
+# 在打包环境下启用日志
+if getattr(sys, 'frozen', False):
+    setup_logging()
+
 import torch
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -302,17 +360,54 @@ async def transcribe_normal(
             else:
                 raise HTTPException(status_code=500, detail="No transcription result")
 
+        except FileNotFoundError as e:
+            logger.error(f"📁 临时文件未找到: {tmp_path}, 错误: {e}")
+            raise HTTPException(status_code=500, detail="文件处理错误")
+        except torch.cuda.OutOfMemoryError as e:
+            logger.error(f"💾 GPU内存不足: {e}")
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            raise HTTPException(status_code=503, detail="GPU内存不足")
+        except ImportError as e:
+            logger.error(f"📦 模型依赖缺失: {e}")
+            raise HTTPException(status_code=503, detail="模型依赖错误")
         except Exception as e:
-            logger.error(f"Transcription error: {e}")
-            raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+            import traceback
+            logger.error(f"❌ 转录失败详情:")
+            logger.error(f"   📄 文件名: {file.filename}")
+            logger.error(f"   📊 文件大小: {file_size} bytes")
+            logger.error(f"   🌐 语言: {language}, 使用ITN: {use_itn}")
+            logger.error(f"   🏷️  错误类型: {type(e).__name__}")
+            logger.error(f"   💬 错误信息: {str(e)}")
+            logger.error(f"   📚 完整堆栈:")
+            for line in traceback.format_exc().split('\n'):
+                if line.strip():
+                    logger.error(f"     {line}")
+            raise HTTPException(status_code=500, detail=f"转录失败: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
+    from datetime import datetime
+    
     print("\n" + "🎤" * 35 + "\n", flush=True)
     print("🚀 启动 Ohoo SenseVoice 语音识别服务...", flush=True)
     print(f"📅 启动时间: {time.strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
     print("\n" + "🎤" * 35 + "\n", flush=True)
+    
+    # 调试信息
+    print(f"🐍 Python版本: {sys.version}", flush=True)
+    print(f"📁 工作目录: {os.getcwd()}", flush=True)
+    print(f"🚀 可执行文件: {sys.executable}", flush=True)
+    print(f"📦 是否打包: {getattr(sys, 'frozen', False)}", flush=True)
+    print(f"🧠 PyTorch版本: {torch.__version__}", flush=True)
+    print(f"💾 设备: {'CUDA' if torch.cuda.is_available() else 'CPU'}", flush=True)
+    
+    # 模型路径调试
+    model_path = get_model_path()
+    print(f"📂 模型路径: {model_path}", flush=True)
+    
+    print("=" * 70, flush=True)
     
     uvicorn.run(
         app, 
