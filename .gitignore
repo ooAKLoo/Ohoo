@@ -13,3 +13,7 @@ python-service/__pycache__
 python-service/models
 Release
 python-service/dist_nuitka
+python-service/*.json
+python-service/*.png
+python-service/.nuitka_cache
+python-service/server.dist

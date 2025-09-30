@@ -17,8 +17,13 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.0", features = [ "window-unmaximize", "window-start-dragging", "window-maximize", "window-minimize", "window-hide", "window-show", "window-close", "window-unminimize", "shell-open", "http-all", "shell-sidecar", "devtools"] }
 tauri-plugin-store = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "multipart"] }
 tokio = { version = "1", features = ["full"] }
+# 音频相关依赖
+cpal = "0.15"
+ringbuf = "0.3"
+hound = "3.5"
+once_cell = "1.19"
 
 [features]
 # by default Tauri runs in production mode

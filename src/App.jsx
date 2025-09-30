@@ -8,7 +8,7 @@ import {
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import { Copy, Check, Bookmark, X, ArrowUp, Trash2, LayoutGrid } from 'lucide-react';
-import toWav from 'audiobuffer-to-wav';
+// 删除 toWav 导入，现在由 Rust 处理音频转换
 
 // 在组件外部创建 store 实例
 const store = new Store('.settings.dat');
@@ -27,29 +27,10 @@ function App() {
   const [transcriptionMode, setTranscriptionMode] = useState('replace'); // 'replace' or 'append'
   const [copiedItems, setCopiedItems] = useState(new Set()); // 追踪已复制的条目ID
   
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
   const swipeStartX = useRef(null);
-  const streamRef = useRef(null);
-  const currentMimeTypeRef = useRef('audio/wav'); // 保存当前使用的格式
+  // 删除不再需要的 Web API 相关 ref
 
-  // 音频转换函数：将 webm 转换为 WAV
-  const convertToWav = async (webmBlob) => {
-    try {
-      console.log('开始转换音频格式 webm -> wav');
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const arrayBuffer = await webmBlob.arrayBuffer();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      const wavArrayBuffer = toWav(audioBuffer);
-      const wavBlob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
-      console.log(`转换完成: ${webmBlob.size} bytes -> ${wavBlob.size} bytes`);
-      return wavBlob;
-    } catch (error) {
-      console.error('音频转换失败:', error);
-      // 转换失败时返回原始 blob
-      return webmBlob;
-    }
-  };
+  // 删除音频转换函数，现在由 Rust 直接处理
 
   // 添加到历史记录的辅助函数，带去重检查
   const addToHistory = (text) => {
@@ -111,60 +92,8 @@ function App() {
     }
   }, [pinnedItems]);
 
-  // 预热麦克风
-  useEffect(() => {
-    const initMicrophone = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: 16000  // SenseVoice优化的采样率
-          } 
-        });
-        streamRef.current = stream;
-        // 静音所有轨道但保持连接
-        stream.getTracks().forEach(track => track.enabled = false);
-      } catch (error) {
-        console.log('Microphone pre-init failed:', error);
-      }
-    };
-    
-    initMicrophone();
-    
-    return () => {
-      // 清理
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  // 组件卸载时彻底清理
-  useEffect(() => {
-    return () => {
-      // 停止所有录音
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      
-      // 清理音频流
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-          track.enabled = false;
-        });
-        streamRef.current = null;
-      }
-      
-      // 清理音频数据
-      audioChunksRef.current = [];
-      
-      // 清理MediaRecorder引用
-      mediaRecorderRef.current = null;
-    };
-  }, []);
+  // 移除预热麦克风逻辑，改为按需初始化
+  // Rust 端会自动管理音频资源，无需手动清理
 
   useEffect(() => {
     // 检查是否在Tauri环境中
@@ -193,95 +122,24 @@ function App() {
 
   const startRecording = async () => {
     try {
-      let stream = streamRef.current;
-      
-      // 检查流状态并重新获取或启用
-      if (!stream || stream.getTracks()[0].readyState === 'ended') {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: 16000
-          } 
-        });
-        streamRef.current = stream;
-      } else {
-        // 启用音频轨道
-        stream.getTracks().forEach(track => track.enabled = true);
-      }
-      
-      // 复用或创建 MediaRecorder
-      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
-        // 使用浏览器支持的格式录音，然后转换为 WAV
-        const mimeType = 'audio/webm';  // 浏览器通用支持的格式
-        console.log('录音格式:', mimeType, '-> 将转换为 WAV');
-        currentMimeTypeRef.current = 'audio/wav'; // 最终输出格式
-        
-        mediaRecorderRef.current = new MediaRecorder(stream, { 
-          mimeType: mimeType,
-          audioBitsPerSecond: 256000  // 提高到256kbps，提升音质
-        });
-        
-        mediaRecorderRef.current.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
-          }
-        };
-        
-        mediaRecorderRef.current.onstop = async () => {
-          const webmBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          audioChunksRef.current = []; // 立即清空
-          
-          // 转换为 WAV 格式
-          const wavBlob = await convertToWav(webmBlob);
-          await transcribeAudio(wavBlob);
-          // 停止后重新静音但保持流
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.enabled = false);
-          }
-        };
-      }
-      
-      // 清空音频数据准备新录音
-      audioChunksRef.current = [];
-      // 使用 timeslice 参数，每100ms获取一次数据
-      mediaRecorderRef.current.start(100);
+      // 使用 Rust 原生音频 API
+      await invoke('start_audio_recording');
       setIsRecording(true);
-      
+      console.log('开始录音 - 使用 Rust 原生接口');
     } catch (error) {
-      console.error('Error accessing microphone:', error);
-      showToastMessage('无法访问麦克风');
+      console.error('Error starting recording:', error);
+      showToastMessage('无法开始录音');
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  const transcribeAudio = async (audioBlob) => {
+  const stopRecording = async () => {
     try {
+      setIsRecording(false);
       setIsTranscribing(true);
       
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'recording.wav');  // 总是使用 WAV 格式
-      formData.append('language', 'auto');
-      formData.append('use_itn', 'true');
-      
-      
-      const response = await fetch('http://localhost:8001/transcribe/normal', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error('Transcription failed');
-      }
-      
-      const result = await response.json();
+      // 使用 Rust 原生音频 API 停止录音并获取转写结果
+      const result = await invoke('stop_audio_recording');
+      console.log('录音停止 - 使用 Rust 原生接口');
       
       // 根据模式处理转写结果
       if (transcriptionMode === 'replace') {
@@ -298,11 +156,14 @@ function App() {
         setCurrentText(newText);
       }
     } catch (error) {
-      console.error('Transcription error:', error);
+      console.error('Error stopping recording:', error);
+      showToastMessage('录音停止失败');
     } finally {
       setIsTranscribing(false);
     }
   };
+
+  // 删除原有的 transcribeAudio 函数，现在由 Rust 直接处理
 
   const clearText = () => {
     setCurrentText('');

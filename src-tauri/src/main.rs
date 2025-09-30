@@ -2,9 +2,14 @@
 
 use std::sync::Mutex;
 use tauri::{Manager, State};
+// 删除不需要的导入
+
+mod audio_manager;
+use audio_manager::AudioManager;
 
 struct AppState {
     sidecar_handle: Mutex<Option<(tauri::async_runtime::Receiver<tauri::api::process::CommandEvent>, tauri::api::process::CommandChild)>>,
+    audio_manager: Mutex<AudioManager>,
 }
 
 #[tauri::command]
@@ -47,7 +52,8 @@ async fn start_python_service(_state: State<'_, AppState>) -> Result<String, Str
 async fn stop_python_service(state: State<'_, AppState>) -> Result<String, String> {
     let mut handle = state.sidecar_handle.lock().unwrap();
     
-    if let Some((_, mut child)) = handle.take() {
+    if let Some((_, child)) = handle.take() {
+        let mut child = child;
         match child.kill() {
             Ok(_) => Ok("Python service stopped".to_string()),
             Err(e) => Err(format!("Failed to stop service: {}", e))
@@ -57,10 +63,64 @@ async fn stop_python_service(state: State<'_, AppState>) -> Result<String, Strin
     }
 }
 
+#[tauri::command]
+async fn start_audio_recording(state: State<'_, AppState>) -> Result<String, String> {
+    let mut audio_manager = state.audio_manager.lock().unwrap();
+    audio_manager.start_recording()?;
+    Ok("Recording started".to_string())
+}
+
+#[tauri::command]
+async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    // 先获取音频数据，然后释放锁
+    let wav_data = {
+        let mut audio_manager = state.audio_manager.lock().unwrap();
+        audio_manager.stop_recording()?
+    };
+    
+    // 发送到Python服务进行转写
+    let client = reqwest::Client::new();
+    let form = reqwest::multipart::Form::new()
+        .part("file", reqwest::multipart::Part::bytes(wav_data)
+            .file_name("recording.wav")
+            .mime_str("audio/wav").unwrap())
+        .text("language", "auto")
+        .text("use_itn", "true");
+    
+    let response = client
+        .post("http://localhost:8001/transcribe/normal")
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("发送转写请求失败: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("转写服务返回错误: {}", response.status()));
+    }
+    
+    let result: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析转写结果失败: {}", e))?;
+    
+    Ok(result)
+}
+
+#[tauri::command]
+async fn is_audio_recording(state: State<'_, AppState>) -> Result<bool, String> {
+    let audio_manager = state.audio_manager.lock().unwrap();
+    Ok(audio_manager.is_recording())
+}
+
 fn main() {
+    // 初始化音频管理器
+    let mut audio_manager = AudioManager::new().expect("创建音频管理器失败");
+    audio_manager.initialize().expect("初始化音频系统失败");
+    
     tauri::Builder::default()
         .manage(AppState {
             sidecar_handle: Mutex::new(None),
+            audio_manager: Mutex::new(audio_manager),
         })
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
@@ -73,7 +133,10 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             start_python_service, 
-            stop_python_service
+            stop_python_service,
+            start_audio_recording,
+            stop_audio_recording,
+            is_audio_recording
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
