@@ -24,6 +24,11 @@ cpal = "0.15"
 ringbuf = "0.3"
 hound = "3.5"
 once_cell = "1.19"
+# 窗口阴影控制
+window-shadows = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.24"
 
 [features]
 # by default Tauri runs in production mode

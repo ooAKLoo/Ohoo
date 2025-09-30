@@ -303,7 +303,7 @@ function App() {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-transparent"
+    <div className="w-screen h-screen flex flex-col bg-gray-200/20 backdrop-blur-sm rounded-2xl"
          onMouseDown={async (e) => {
            // 只在非交互元素上允许拖动
            const target = e.target;
@@ -322,14 +322,13 @@ function App() {
              }
            }
          }}>
-      {/* 主内容区 - 固定高度容器内滚动 */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-4 space-y-4">
+      {/* 主内容区 */}
+      <div className="flex-1">
+        <div className="p-4">
           {/* 文本显示区域 - 可编辑 */}
-          <div className="relative rounded-2xl">
+          <div className="relative rounded-2xl ">
             <div 
-              className="rounded-lg"
-              style={{ backgroundColor: '#F5F5F5' }}
+              className="rounded-2xl bg-white"
               onWheel={handleWheelSwipe}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
@@ -359,7 +358,7 @@ function App() {
                       
                       {/* 悬浮提示框 */}
                       {hoveredBubble === item.id && (
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1.5 px-2 py-1.5 bg-gray-800 text-white text-[11px] rounded-md shadow-lg max-w-40 z-50">
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1.5 px-2 py-1.5 bg-gray-800 text-white text-[11px] rounded-md max-w-40 z-50">
                           <div className="line-clamp-2">{item.text}</div>
                         </div>
                       )}
@@ -368,12 +367,9 @@ function App() {
                   )}
                 </div>
                 
-                {/* 左右渐变虚化效果 */}
+                {/* 右侧渐变虚化效果 */}
                 {historyItems.length > 0 && (
-                  <>
-                    <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#F5F5F5] to-transparent pointer-events-none rounded-lg"></div>
-                    <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#F5F5F5] to-transparent pointer-events-none rounded-lg"></div>
-                  </>
+                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none rounded-lg"></div>
                 )}
               </div>
 
@@ -500,38 +496,15 @@ function App() {
           {/* 置顶消息列表 - 带优雅装饰 */}
           {pinnedItems.length > 0 && (
             <>
-              {/* 优雅的过渡装饰 */}
-              <div className="flex items-center justify-between mt-6 mb-3">
-                {/* 左侧装饰 */}
-                <div className="flex items-center space-x-1.5">
-                  <svg width="16" height="16" viewBox="0 0 16 16" className="text-gray-300">
-                    <rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor" opacity="0.6"/>
-                    <rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor" opacity="0.4"/>
-                    <rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor" opacity="0.4"/>
-                    <rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor" opacity="0.2"/>
-                  </svg>
-                </div>
-                
-                {/* 右侧计数 */}
-                <div className="flex items-center space-x-1">
-                  <span className="text-[10px] text-gray-400">{pinnedItems.length}</span>
-                  <div className="w-3 h-3">
-                    <svg viewBox="0 0 12 12" className="text-gray-300">
-                      <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.3"/>
-                      <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray={`${(pinnedItems.length/10) * 31.4} 31.4`} transform="rotate(-90 6 6)" opacity="0.8"/>
-                    </svg>
-                  </div>
-                </div>
-              </div>
 
               {/* 置顶内容 - Flow Layout */}
-              <div className="max-h-48 overflow-y-auto">
-                <div className="flex flex-wrap gap-2">
+              <div className="mt-4">
+                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
                   {pinnedItems.slice(0, 10).map((item, index) => (
                     <div
                       key={item.id}
-                      className="inline-flex items-center rounded-full px-3 py-1.5 group relative transition-all duration-200 hover:bg-gray-100 cursor-pointer"
-                      style={{ backgroundColor: '#F5F5F5' }}
+                      className="inline-flex items-center rounded-full px-3 py-1.5 group relative transition-all duration-200 hover:bg-gray-100 cursor-pointer bg-white"
+                      onClick={() => fillToTextbox(item.text)}
                     >
                       {/* 左侧小圆点 */}
                       <div 
@@ -542,7 +515,6 @@ function App() {
                       {/* 文字内容 - 显示时截断 */}
                       <span 
                         className="text-xs font-mono text-gray-700 group-hover:opacity-0 transition-opacity whitespace-nowrap"
-                        onClick={() => copyToClipboard(item.text, item.id)}
                         title={item.text}  // 完整内容显示在 tooltip
                       >
                         {item.text.length > 20 
@@ -552,18 +524,6 @@ function App() {
                       
                       {/* 按钮组 - hover状态覆盖显示 */}
                       <div className="absolute inset-0 flex items-center justify-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full border border-gray-200">
-                        {/* 填入转写框按钮 */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fillToTextbox(item.text);
-                          }}
-                          className="text-gray-400 hover:text-blue-500 p-1 rounded transition-colors"
-                          title={transcriptionMode === 'replace' ? '填入转写框（覆盖）' : '填入转写框（追加）'}
-                        >
-                          <ArrowUp size={12} />
-                        </button>
-                        
                         {/* 复制按钮 */}
                         <button
                           onClick={(e) => {

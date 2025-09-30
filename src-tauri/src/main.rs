@@ -124,9 +124,17 @@ fn main() {
         })
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
+            let window = app.get_window("main").unwrap();
+            
+            // 移除窗口阴影
+            #[cfg(any(windows, target_os = "macos"))]
+            {
+                use window_shadows::set_shadow;
+                set_shadow(&window, false).expect("Unsupported platform!");
+            }
+            
             #[cfg(debug_assertions)] // 只在调试构建中包含此代码
             {
-                let window = app.get_window("main").unwrap();
                 window.open_devtools();
             }
             Ok(())
