@@ -331,7 +331,7 @@ function App() {
           {/* 文本显示区域 - 可编辑 */}
           <div className="relative rounded-2xl ">
             {/* 关闭按钮 - 悬浮时显示 */}
-            {isWindowHovered && (
+            {/* {isWindowHovered && (
               <button
                 onClick={async () => {
                   try {
@@ -345,7 +345,7 @@ function App() {
               >
                 <X size={12} className="text-gray-600" />
               </button>
-            )}
+            )} */}
             
             <div 
               className="rounded-2xl"
@@ -557,7 +557,7 @@ function App() {
                         className="text-[12px] font-mono text-gray-700 group-hover:opacity-0 transition-opacity whitespace-nowrap"
                         title={item.text}  // 完整内容显示在 tooltip
                       >
-                        {item.text.length > 20 
+                        {item.text.length > 10 
                           ? item.text.slice(0, 10) + '…' 
                           : item.text}
                       </span>
