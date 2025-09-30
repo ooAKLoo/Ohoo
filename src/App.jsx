@@ -27,6 +27,21 @@ function App() {
   const [isUsingRemoteService, setIsUsingRemoteService] = useState(false); // 是否使用远程服务
   
   const swipeStartX = useRef(null);
+  const pinnedScrollRef = useRef(null); // 添加滚动容器的引用
+
+  // 调试：监控置顶内容滚动容器
+  useEffect(() => {
+    if (pinnedScrollRef.current) {
+      console.log('置顶内容滚动容器已挂载', {
+        scrollHeight: pinnedScrollRef.current.scrollHeight,
+        clientHeight: pinnedScrollRef.current.clientHeight,
+        offsetHeight: pinnedScrollRef.current.offsetHeight,
+        scrollTop: pinnedScrollRef.current.scrollTop,
+        overflow: window.getComputedStyle(pinnedScrollRef.current).overflow,
+        maxHeight: window.getComputedStyle(pinnedScrollRef.current).maxHeight
+      });
+    }
+  }, [pinnedItems]);
 
   // 添加到历史记录的辅助函数，带去重检查
   const addToHistory = (text) => {
@@ -88,7 +103,6 @@ function App() {
     }
   }, [pinnedItems]);
 
-
   useEffect(() => {
     // 检查是否在Tauri环境中
     if (window.__TAURI__) {
@@ -105,7 +119,6 @@ function App() {
         });
     }
   }, []);
-
 
   const toggleRecording = async () => {
     // 转写中时禁止录音操作
@@ -160,7 +173,6 @@ function App() {
       setIsTranscribing(false);
     }
   };
-
 
   const clearText = () => {
     setCurrentText('');
@@ -309,7 +321,7 @@ function App() {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col "
+    <div className="w-screen h-screen flex flex-col overflow-hidden bg-transparent"
          onMouseEnter={() => setIsWindowHovered(true)}
          onMouseLeave={() => setIsWindowHovered(false)}
          onMouseDown={async (e) => {
@@ -330,31 +342,14 @@ function App() {
              }
            }
          }}>
-      {/* 主内容区 */}
-      <div className="flex-1">
-        <div className="p-4">
+      {/* 主内容区 - 添加 overflow-hidden 防止内容溢出 */}
+      <div className="flex-1 overflow-hidden">
+        <div className="p-4 h-full flex flex-col">
           {/* 文本显示区域 - 可编辑 */}
-          <div className="relative rounded-2xl ">
-            {/* 关闭按钮 - 悬浮时显示 */}
-            {/* {isWindowHovered && (
-              <button
-                onClick={async () => {
-                  try {
-                    await appWindow.close();
-                  } catch (error) {
-                    console.error('关闭窗口失败:', error);
-                  }
-                }}
-                className="absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:shadow-md z-50 opacity-80 hover:opacity-100"
-                style={{ backgroundColor: '#F5F5F5' }}
-              >
-                <X size={12} className="text-gray-600" />
-              </button>
-            )} */}
-            
+          <div className="relative rounded-2xl">
             <div 
               className="rounded-2xl"
-              style={{ backgroundColor: '#F5F5F5' }}
+              style={{ backgroundColor: '#FFFFFF' }}
               onWheel={handleWheelSwipe}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
@@ -395,7 +390,7 @@ function App() {
                 
                 {/* 右侧渐变虚化效果 */}
                 {historyItems.length > 0 && (
-                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#F5F5F5] to-transparent pointer-events-none rounded-lg"></div>
+                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#FFFFFF] to-transparent pointer-events-none rounded-lg"></div>
                 )}
                 
                 {/* 拖拽图标 - 悬浮时显示 */}
@@ -480,31 +475,31 @@ function App() {
                 {/* 右侧：按钮组 */}
                 <div className="bg-gray-100 rounded-lg px-1 py-0.5 flex items-center space-x-1">
                   {/* 录音按钮 */}
-<button
-  onClick={toggleRecording}
-  disabled={isTranscribing}
-  className="relative group"
->
-  <div className={`w-7 h-7 rounded flex items-center justify-center transition-all duration-300 relative ${
-    !isRecording && !isTranscribing
-      ? 'hover:bg-gray-200 text-gray-600'
-      : isRecording 
-        ? 'text-red-500'  // 录音时图标变红
-        : 'text-gray-600'
-  } ${isTranscribing ? 'opacity-50' : ''}`}>
-    {isTranscribing ? (
-      <div className="w-3.5 h-3.5 border border-gray-400 border-t-transparent rounded-full animate-spin" />
-    ) : (
-      <>
-        <MicrophoneIcon className="w-3.5 h-3.5 z-10" />
-        {/* 中心呼吸红点 - 改小 */}
-        {isRecording && (
-          <div className="absolute w-1 h-1 bg-red-500 rounded-full animate-pulse" />
-        )}
-      </>
-    )}
-  </div>
-</button>
+                  <button
+                    onClick={toggleRecording}
+                    disabled={isTranscribing}
+                    className="relative group"
+                  >
+                    <div className={`w-7 h-7 rounded flex items-center justify-center transition-all duration-300 relative ${
+                      !isRecording && !isTranscribing
+                        ? 'hover:bg-gray-200 text-gray-600'
+                        : isRecording 
+                          ? 'text-red-500'  // 录音时图标变红
+                          : 'text-gray-600'
+                    } ${isTranscribing ? 'opacity-50' : ''}`}>
+                      {isTranscribing ? (
+                        <div className="w-3.5 h-3.5 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <MicrophoneIcon className="w-3.5 h-3.5 z-10" />
+                          {/* 中心呼吸红点 - 改小 */}
+                          {isRecording && (
+                            <div className="absolute w-1 h-1 bg-red-500 rounded-full animate-pulse" />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </button>
 
                   {/* 分隔线 */}
                   <div className="w-px h-4 bg-gray-300"></div>
@@ -552,18 +547,25 @@ function App() {
             </div>
           </div>
 
-          {/* 置顶消息列表 - 带优雅装饰 */}
+          {/* 置顶消息列表 - 修复滚动问题 */}
           {pinnedItems.length > 0 && (
-            <>
-
-              {/* 置顶内容 - Flow Layout */}
-              <div className="mt-4">
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {pinnedItems.slice(0, 10).map((item, index) => (
+            <div className="mt-4 flex-1 overflow-hidden">
+              <div 
+                ref={pinnedScrollRef}
+                className="h-full max-h-48 overflow-y-auto scrollbar-thin"
+                onScroll={() => {
+                  console.log('滚动事件触发', {
+                    scrollTop: pinnedScrollRef.current?.scrollTop,
+                    scrollHeight: pinnedScrollRef.current?.scrollHeight
+                  });
+                }}
+              >
+                <div className="flex flex-wrap gap-2 pb-2">
+                  {pinnedItems.map((item) => (
                     <div
                       key={item.id}
                       className="inline-flex items-center rounded-full px-2.5 py-1 group relative transition-all duration-200 hover:bg-gray-100 cursor-pointer"
-                      style={{ backgroundColor: '#F5F5F5' }}
+                      style={{ backgroundColor: '#FFFFFF' }}
                       onClick={() => fillToTextbox(item.text)}
                     >
                       {/* 左侧小圆点 */}
@@ -616,11 +618,8 @@ function App() {
                   ))}
                 </div>
               </div>
-            </>
+            </div>
           )}
-          
-          {/* 添加底部安全边距，确保最后内容可见 */}
-          <div className="h-4"></div>
         </div>
       </div>
 

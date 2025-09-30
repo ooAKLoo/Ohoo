@@ -13,13 +13,21 @@
   "tauri": {
     "allowlist": {
       "all": false,
+      "shell": {
+        "all": false,
+        "open": true,
+        "sidecar": true,
+        "scope": [
+          {
+            "name": "sense_voice_server",
+            "sidecar": true
+          }
+        ]
+      },
       "http": {
         "all": true,
         "request": true,
-        "scope": [
-          "http://115.190.136.178:8001/**",
-          "http://localhost:1758/**"
-        ]
+        "scope": ["http://localhost:8001/**"]
       },
       "window": {
         "all": false,
@@ -41,6 +49,7 @@
       "deb": {
         "depends": []
       },
+      "externalBin": ["binaries/sense_voice_server"],
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
