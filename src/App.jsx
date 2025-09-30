@@ -4,11 +4,9 @@ import { appWindow } from '@tauri-apps/api/window';
 import { Store } from 'tauri-plugin-store-api';
 import { 
   MicrophoneIcon, 
-  StopIcon,
-  ChevronDownIcon
+  StopIcon
 } from '@heroicons/react/24/outline';
-import { Copy, Check, Bookmark, X, ArrowUp, Trash2, LayoutGrid } from 'lucide-react';
-// 删除 toWav 导入，现在由 Rust 处理音频转换
+import { Copy, Check, Bookmark, X, ArrowUp, Trash2 } from 'lucide-react';
 
 // 在组件外部创建 store 实例
 const store = new Store('.settings.dat');
@@ -21,16 +19,12 @@ function App() {
   const [historyItems, setHistoryItems] = useState([]);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [hoveredBubble, setHoveredBubble] = useState(null);
   const [transcriptionMode, setTranscriptionMode] = useState('replace'); // 'replace' or 'append'
   const [copiedItems, setCopiedItems] = useState(new Set()); // 追踪已复制的条目ID
   
   const swipeStartX = useRef(null);
-  // 删除不再需要的 Web API 相关 ref
-
-  // 删除音频转换函数，现在由 Rust 直接处理
 
   // 添加到历史记录的辅助函数，带去重检查
   const addToHistory = (text) => {
@@ -87,13 +81,11 @@ function App() {
       }
     };
     
-    if (pinnedItems.length >= 0) {
+    if (pinnedItems.length > 0) {
       savePinnedItems();
     }
   }, [pinnedItems]);
 
-  // 移除预热麦克风逻辑，改为按需初始化
-  // Rust 端会自动管理音频资源，无需手动清理
 
   useEffect(() => {
     // 检查是否在Tauri环境中
@@ -163,7 +155,6 @@ function App() {
     }
   };
 
-  // 删除原有的 transcribeAudio 函数，现在由 Rust 直接处理
 
   const clearText = () => {
     setCurrentText('');
@@ -431,7 +422,6 @@ function App() {
                 {/* 右侧：按钮组 */}
                 <div className="bg-gray-100 rounded-lg px-1 py-0.5 flex items-center space-x-1">
                   {/* 录音按钮 */}
-                 {/* 录音按钮 - 简洁版 */}
 <button
   onClick={toggleRecording}
   disabled={isTranscribing}
