@@ -171,11 +171,9 @@ function App() {
 
   const pinCurrentText = () => {
     if (currentText.trim()) {
-      // 限制为30个字符
-      const truncatedText = currentText.trim().slice(0, 30);
       const newItem = {
         id: Date.now(),
-        text: truncatedText,
+        text: currentText.trim(),  // 保存完整内容
         timestamp: new Date()
       };
       
@@ -314,9 +312,10 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col">
-      {/* 主内容区 - 直接铺满窗口 */}
-      <div className="flex-1 p-4 space-y-4">
+    <div className="w-screen h-screen flex flex-col">
+      {/* 主内容区 - 固定高度容器内滚动 */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-4 space-y-4">
           {/* 文本显示区域 - 可编辑 */}
           <div className="relative rounded-2xl">
             <div 
@@ -329,10 +328,10 @@ function App() {
               onMouseUp={handleMouseUp}
             >
               {/* 历史记录胶囊区域 */}
-              <div className="relative px-3 pt-3 pb-2 rounded-t-lg">
-                <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide">
+              <div className="relative px-3 pt-2 pb-1.5 rounded-t-lg">
+                <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-hide">
                   {historyItems.length === 0 ? (
-                    <span className="text-xs text-gray-400 px-3 py-1.5">暂无历史记录</span>
+                    <span className="text-[10px] text-gray-400 px-2 py-0.5">暂无历史记录</span>
                   ) : (
                     historyItems.slice(0, 4).map((item, index) => (
                     <div
@@ -342,7 +341,7 @@ function App() {
                       onMouseLeave={() => setHoveredBubble(null)}
                     >
                       <div 
-                        className="px-3 py-1.5 border border-dashed border-gray-300 hover:border-transparent hover:bg-blue-50 rounded-full text-xs text-gray-600 hover:text-blue-700 cursor-pointer transition-all whitespace-nowrap"
+                        className="px-2 py-0.5 border border-dashed border-gray-300 hover:border-transparent hover:bg-blue-50 rounded-full text-[10px] text-gray-400 hover:text-blue-600 cursor-pointer transition-all whitespace-nowrap"
                         onClick={() => selectHistoryItem(item.text)}
                         title={item.text}
                       >
@@ -351,8 +350,8 @@ function App() {
                       
                       {/* 悬浮提示框 */}
                       {hoveredBubble === item.id && (
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg max-w-48 z-50">
-                          <div className="line-clamp-3">{item.text}</div>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1.5 px-2 py-1.5 bg-gray-800 text-white text-[11px] rounded-md shadow-lg max-w-40 z-50">
+                          <div className="line-clamp-2">{item.text}</div>
                         </div>
                       )}
                     </div>
@@ -532,12 +531,15 @@ function App() {
                         style={{ backgroundColor: '#FF6600' }}
                       ></div>
                       
-                      {/* 文字内容 */}
+                      {/* 文字内容 - 显示时截断 */}
                       <span 
-                        className="text-xs font-medium text-gray-600 group-hover:opacity-0 transition-opacity whitespace-nowrap"
+                        className="text-xs font-mono text-gray-700 group-hover:opacity-0 transition-opacity whitespace-nowrap"
                         onClick={() => copyToClipboard(item.text, item.id)}
+                        title={item.text}  // 完整内容显示在 tooltip
                       >
-                        {item.text}
+                        {item.text.length > 20 
+                          ? item.text.slice(0, 20) + '...' 
+                          : item.text}
                       </span>
                       
                       {/* 按钮组 - hover状态覆盖显示 */}
@@ -588,9 +590,13 @@ function App() {
               </div>
             </>
           )}
+          
+          {/* 添加底部安全边距，确保最后内容可见 */}
+          <div className="h-4"></div>
         </div>
+      </div>
 
-      {/* Toast 通知 */}
+      {/* Toast 通知 - 保持固定定位 */}
       {showToast && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-3 py-1 rounded-lg shadow-lg text-xs z-50 animate-pulse">
           {toastMessage}

@@ -90,30 +90,13 @@ def setup_logging():
 if getattr(sys, 'frozen', False):
     setup_logging()
 
-import torch
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
-try:
-    from funasr_onnx import SenseVoiceSmall as ONNXSenseVoiceSmall
-    ONNX_AVAILABLE = True
-    print("✅ ONNX 运行时可用", flush=True)
-except ImportError:
-    ONNX_AVAILABLE = False
-    print("⚠️ ONNX 不可用，使用 PyTorch", flush=True)
+from funasr_onnx import SenseVoiceSmall as ONNXSenseVoiceSmall
+from funasr_onnx.utils.postprocess_utils import rich_transcription_postprocess
 
-from funasr import AutoModel
-from funasr.utils.postprocess_utils import rich_transcription_postprocess
-
-# 中文ITN处理
-try:
-    from chinese_itn import chinese_to_num
-    ITN_AVAILABLE = True
-    print("✅ 中文ITN库加载成功", flush=True)
-except ImportError:
-    chinese_to_num = None
-    ITN_AVAILABLE = False
-    print("⚠️ 中文ITN库不可用，跳过数字标准化", flush=True)
+print("✅ ONNX 运行时加载成功", flush=True)
 
 # 配置日志
 logging.basicConfig(
@@ -123,7 +106,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="SenseVoice Streaming API")
+app = FastAPI(title="SenseVoice ONNX API")
 
 # 添加CORS支持
 app.add_middleware(
@@ -138,6 +121,26 @@ app.add_middleware(
 model = None
 # 限制并发请求数量
 SEMAPHORE = asyncio.Semaphore(3)  # 最多同时处理3个请求
+
+# ✅ 纯ONNX设备检测函数
+def get_available_device():
+    """检测可用设备（纯ONNX版本）"""
+    try:
+        import onnxruntime as ort
+        providers = ort.get_available_providers()
+        
+        if 'CUDAExecutionProvider' in providers:
+            print("🚀 检测到CUDA支持", flush=True)
+            return "cuda"
+        elif 'CoreMLExecutionProvider' in providers:
+            print("🍎 检测到CoreML支持", flush=True)
+            return "coreml"
+        else:
+            print("💻 使用CPU", flush=True)
+            return "cpu"
+    except:
+        print("💻 默认使用CPU", flush=True)
+        return "cpu"
 
 
 def get_model_path():
@@ -195,37 +198,19 @@ def init_model():
         print("=" * 70, flush=True)
         print("🚀 开始初始化 SenseVoice 语音识别模型", flush=True)
         
-        # 检测设备
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        # ✅ 使用纯ONNX设备检测
+        device = get_available_device()
         print(f"📱 使用设备: {device}", flush=True)
 
         # 获取模型路径
         models_path = get_model_path()
         
-        if models_path:
-            print(f"📂 使用本地模型: {models_path}", flush=True)
-            sense_voice_path = models_path / "iic" / "SenseVoiceSmall"
-            vad_path = models_path / "iic" / "speech_fsmn_vad_zh-cn-16k-common-pytorch"
-            
-            if sense_voice_path.exists() and vad_path.exists():
-                print("✅ 检测到本地模型文件", flush=True)
-                model_name = str(sense_voice_path)
-                vad_model_name = str(vad_path)
-            else:
-                print("⚠️  本地模型不完整，使用在线模型", flush=True)
-                model_name = "iic/SenseVoiceSmall"
-                vad_model_name = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
-        else:
-            print("⚠️  首次运行需要下载模型文件（约1GB），请耐心等待...", flush=True)
-            model_name = "iic/SenseVoiceSmall"
-            vad_model_name = "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        if not models_path:
+            print("❌ 未找到模型文件夹，请确保models目录存在", flush=True)
+            return False
 
+        print(f"📂 使用本地ONNX模型: {models_path}", flush=True)
         print("=" * 70, flush=True)
-
-        # 设置PyTorch性能优化
-        if torch.cuda.is_available():
-            torch.backends.cudnn.benchmark = True
-            torch.cuda.empty_cache()
 
         # 初始化模型
         print("⏳ 正在加载模型到内存，请稍候...", flush=True)
@@ -241,26 +226,43 @@ def init_model():
             
             # 检查ONNX模型路径（嵌套目录）
             onnx_model_path = models_path / "models" / "iic" / "SenseVoiceSmall"
+            if not onnx_model_path.exists():
+                # 尝试非嵌套路径
+                onnx_model_path = models_path / "iic" / "SenseVoiceSmall"
+            
+            if not onnx_model_path.exists():
+                print(f"❌ ONNX模型目录不存在: {onnx_model_path}", flush=True)
+                return False
+                
             onnx_quant_path = onnx_model_path / "model_quant.onnx"
+            onnx_path = onnx_model_path / "model.onnx"
             
             # ONNX模型会自动处理ITN，无需额外配置文件
             
+            # 设备已在上面检测过了
+            print(f"📱 使用设备: {device}", flush=True)
+            
             if onnx_quant_path.exists():
-                print(f"🔥 使用量化ONNX模型: {onnx_model_path}", flush=True)
+                print(f"🔥 使用量化ONNX模型（最快）", flush=True)
                 model = ONNXSenseVoiceSmall(
                     str(onnx_model_path),
-                    quantize=True,
-                    device="cuda" if torch.cuda.is_available() else "cpu"
+                    batch_size=1,
+                    quantize=False,
+                    device=device,
+                    intra_op_num_threads=8  # 限制线程数，防止CPU过载
+                )
+            elif onnx_path.exists():
+                print(f"⚡ 使用标准ONNX模型", flush=True)
+                model = ONNXSenseVoiceSmall(
+                    str(onnx_model_path),
+                    batch_size=1,
+                    quantize=False,  # 启用量化以优化性能
+                    device=device,
+                    intra_op_num_threads=8  # 限制线程数，防止CPU过
                 )
             else:
-                # 标准ONNX模型
-                onnx_path = onnx_model_path / "model.onnx"
-                print(f"⚡ 使用标准ONNX模型: {onnx_model_path}", flush=True)
-                model = ONNXSenseVoiceSmall(
-                    str(onnx_model_path),
-                    quantize=False,
-                    device="cuda" if torch.cuda.is_available() else "cpu"
-                )
+                print(f"❌ 未找到ONNX模型文件 (model.onnx 或 model_quant.onnx)", flush=True)
+                return False
             
             print("✅ ONNX模型加载完成", flush=True)
             
@@ -268,37 +270,10 @@ def init_model():
             print(f"⏱️  模型加载完成！耗时: {load_time:.2f} 秒", flush=True)
             
         except Exception as e:
-            print(f"详细错误信息：", flush=True)
-            print(f"错误类型: {type(e).__name__}", flush=True)
-            print(f"错误消息: {str(e)}", flush=True)
-            print("完整堆栈追踪：", flush=True)
+            print(f"❌ ONNX模型加载失败: {e}", flush=True)
+            import traceback
             traceback.print_exc()
-            
-            # 检查 funasr 的模块加载情况
-            import funasr
-            print(f"funasr 路径: {funasr.__file__}", flush=True)
-            print(f"funasr 版本: {funasr.__version__}", flush=True)
-            
-            # 检查关键模块
-            try:
-                from funasr.auto import auto_model
-                print(f"auto_model 模块: {auto_model}", flush=True)
-            except ImportError as ie:
-                print(f"无法导入 auto_model: {ie}", flush=True)
-                
-            # 检查 AutoModel 类
-            try:
-                from funasr import AutoModel as TestAutoModel
-                print(f"AutoModel 类型: {type(TestAutoModel)}", flush=True)
-                print(f"AutoModel 是否可调用: {callable(TestAutoModel)}", flush=True)
-            except Exception as ae:
-                print(f"AutoModel 检查失败: {ae}", flush=True)
-            
-            raise
-
-        # 模型推理优化（ONNX模型无需此操作）
-        if hasattr(model, 'model') and hasattr(model.model, 'eval'):
-            model.model.eval()
+            return False
         
         print("=" * 70, flush=True)
         print("✅ 模型初始化成功！服务准备就绪", flush=True)
@@ -324,7 +299,8 @@ async def root():
     return {
         "status": "healthy",
         "model_loaded": model is not None,
-        "device": "cuda" if torch.cuda.is_available() else "cpu"
+        "model_type": "ONNX",
+        "device": get_available_device()
     }
 
 
@@ -377,27 +353,19 @@ async def transcribe_normal(
             # 使用ONNX模型推理
             print("🚀 使用ONNX快速推理", flush=True)
             res = model(
-                tmp_path,
+                [tmp_path],  # ONNX模型需要列表格式
                 language=language if language != "auto" else "auto",
-                use_itn=True  # 关闭ONNX内置ITN，使用我们的中文ITN库
+                textnorm="withitn" if use_itn else "woitn"  # ONNX使用textnorm参数
             )
             
             if res and len(res) > 0:
-                # ONNX 返回格式处理
-                if isinstance(res[0], dict) and "text" in res[0]:
-                    raw_text = res[0]["text"]
-                else:
-                    raw_text = str(res[0])
+                # ONNX版本直接返回处理后的文本字符串
+                raw_text = res[0] if isinstance(res[0], str) else str(res[0])
                 
-                # 使用相同的后处理函数
+                # 使用ONNX版本的后处理函数（已经包含ITN处理）
                 text = rich_transcription_postprocess(raw_text)
                 
-                # 使用中文ITN处理数字标准化
-                if ITN_AVAILABLE and use_itn:
-                    original_text = text
-                    text = chinese_to_num(text)
-                    if text != original_text:
-                        print(f"🔢 ITN处理: {original_text} -> {text}", flush=True)
+                print(f"📝 ONNX识别结果: {text}", flush=True)
                 
                 return {
                     "text": text,
@@ -410,11 +378,6 @@ async def transcribe_normal(
         except FileNotFoundError as e:
             logger.error(f"📁 临时文件未找到: {tmp_path}, 错误: {e}")
             raise HTTPException(status_code=500, detail="文件处理错误")
-        except torch.cuda.OutOfMemoryError as e:
-            logger.error(f"💾 GPU内存不足: {e}")
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            raise HTTPException(status_code=503, detail="GPU内存不足")
         except ImportError as e:
             logger.error(f"📦 模型依赖缺失: {e}")
             raise HTTPException(status_code=503, detail="模型依赖错误")
@@ -447,8 +410,7 @@ if __name__ == "__main__":
     print(f"📁 工作目录: {os.getcwd()}", flush=True)
     print(f"🚀 可执行文件: {sys.executable}", flush=True)
     print(f"📦 是否打包: {getattr(sys, 'frozen', False)}", flush=True)
-    print(f"🧠 PyTorch版本: {torch.__version__}", flush=True)
-    print(f"💾 设备: {'CUDA' if torch.cuda.is_available() else 'CPU'}", flush=True)
+    print(f"💾 设备: {get_available_device()}", flush=True)
     
     # 模型路径调试
     model_path = get_model_path()

@@ -266,13 +266,13 @@ class PerformanceComparison:
         
         # 配置测试服务器
         self.servers = {
-            'PyTorch': ServerTester(
-                '/Users/yangdongju/Desktop/code_project/pc/Ohoo/python-service/server_torch.py',
-                'PyTorch (.pt模型)'
-            ),
             'ONNX': ServerTester(
                 '/Users/yangdongju/Desktop/code_project/pc/Ohoo/python-service/server.py',
                 'ONNX (优化模型)'
+            ),
+             'PyTorch': ServerTester(
+                '/Users/yangdongju/Desktop/code_project/pc/Ohoo/python-service/server_torch.py',
+                'PyTorch (.pt模型)'
             )
         }
     
