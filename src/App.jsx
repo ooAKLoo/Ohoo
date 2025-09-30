@@ -303,7 +303,25 @@ function App() {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-transparent">
+    <div className="w-screen h-screen flex flex-col bg-transparent"
+         onMouseDown={async (e) => {
+           // 只在非交互元素上允许拖动
+           const target = e.target;
+           const isInteractive = 
+             target.tagName === 'BUTTON' ||
+             target.tagName === 'TEXTAREA' ||
+             target.tagName === 'INPUT' ||
+             target.closest('button') ||
+             target.closest('textarea');
+           
+           if (!isInteractive) {
+             try {
+               await appWindow.startDragging();
+             } catch (error) {
+               console.error('拖动失败:', error);
+             }
+           }
+         }}>
       {/* 主内容区 - 固定高度容器内滚动 */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-4">
