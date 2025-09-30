@@ -81,18 +81,19 @@
     "updater": {
       "active": false
     },
+    "macOSPrivateApi": true,
     "windows": [
       {
         "fullscreen": false,
-        "height": 280,
+        "height": 380,
         "resizable": true,
         "title": "Ohoo",
-        "width": 320,
+        "width": 420,
         "minHeight": 180,
         "minWidth": 280,
         "alwaysOnTop": true,
-        "decorations": true,
-        "transparent": false,
+        "decorations": false,
+        "transparent": true,
         "center": false,
         "x": 100,
         "y": 100

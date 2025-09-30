@@ -303,7 +303,7 @@ function App() {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col">
+    <div className="w-screen h-screen flex flex-col bg-transparent">
       {/* 主内容区 - 固定高度容器内滚动 */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-4">
