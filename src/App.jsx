@@ -6,7 +6,7 @@ import {
   MicrophoneIcon, 
   StopIcon
 } from '@heroicons/react/24/outline';
-import { Copy, Check, Bookmark, X, ArrowUp, Trash2 } from 'lucide-react';
+import { Copy, Check, Bookmark, X, ArrowUp, Trash2, GripVertical } from 'lucide-react';
 
 // 在组件外部创建 store 实例
 const store = new Store('.settings.dat');
@@ -23,6 +23,7 @@ function App() {
   const [hoveredBubble, setHoveredBubble] = useState(null);
   const [transcriptionMode, setTranscriptionMode] = useState('replace'); // 'replace' or 'append'
   const [copiedItems, setCopiedItems] = useState(new Set()); // 追踪已复制的条目ID
+  const [isWindowHovered, setIsWindowHovered] = useState(false); // 追踪窗口悬停状态
   
   const swipeStartX = useRef(null);
 
@@ -303,7 +304,9 @@ function App() {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-gray-200/20 backdrop-blur-sm rounded-2xl"
+    <div className="w-screen h-screen flex flex-col "
+         onMouseEnter={() => setIsWindowHovered(true)}
+         onMouseLeave={() => setIsWindowHovered(false)}
          onMouseDown={async (e) => {
            // 只在非交互元素上允许拖动
            const target = e.target;
@@ -327,8 +330,26 @@ function App() {
         <div className="p-4">
           {/* 文本显示区域 - 可编辑 */}
           <div className="relative rounded-2xl ">
+            {/* 关闭按钮 - 悬浮时显示 */}
+            {isWindowHovered && (
+              <button
+                onClick={async () => {
+                  try {
+                    await appWindow.close();
+                  } catch (error) {
+                    console.error('关闭窗口失败:', error);
+                  }
+                }}
+                className="absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm hover:shadow-md z-50 opacity-80 hover:opacity-100"
+                style={{ backgroundColor: '#F5F5F5' }}
+              >
+                <X size={12} className="text-gray-600" />
+              </button>
+            )}
+            
             <div 
-              className="rounded-2xl bg-white"
+              className="rounded-2xl"
+              style={{ backgroundColor: '#F5F5F5' }}
               onWheel={handleWheelSwipe}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
@@ -337,7 +358,7 @@ function App() {
             >
               {/* 历史记录胶囊区域 */}
               <div className="relative px-3 pt-2 pb-1.5 rounded-t-lg">
-                <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-hide">
+                <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-hide relative">
                   {historyItems.length === 0 ? (
                     <span className="text-[10px] text-gray-400 px-2 py-0.5">暂无历史记录</span>
                   ) : (
@@ -369,7 +390,25 @@ function App() {
                 
                 {/* 右侧渐变虚化效果 */}
                 {historyItems.length > 0 && (
-                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none rounded-lg"></div>
+                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#F5F5F5] to-transparent pointer-events-none rounded-lg"></div>
+                )}
+                
+                {/* 拖拽图标 - 悬浮时显示 */}
+                {isWindowHovered && (
+                  <div 
+                    className="absolute right-2 top-1/2 -translate-y-1/2 cursor-move opacity-40 hover:opacity-70 transition-opacity"
+                    onMouseDown={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await appWindow.startDragging();
+                      } catch (error) {
+                        console.error('拖动失败:', error);
+                      }
+                    }}
+                    title="拖动窗口"
+                  >
+                    <GripVertical size={14} className="text-gray-500" />
+                  </div>
                 )}
               </div>
 
@@ -503,7 +542,8 @@ function App() {
                   {pinnedItems.slice(0, 10).map((item, index) => (
                     <div
                       key={item.id}
-                      className="inline-flex items-center rounded-full px-3 py-1.5 group relative transition-all duration-200 hover:bg-gray-100 cursor-pointer bg-white"
+                      className="inline-flex items-center rounded-full px-2.5 py-1 group relative transition-all duration-200 hover:bg-gray-100 cursor-pointer"
+                      style={{ backgroundColor: '#F5F5F5' }}
                       onClick={() => fillToTextbox(item.text)}
                     >
                       {/* 左侧小圆点 */}
@@ -514,11 +554,11 @@ function App() {
                       
                       {/* 文字内容 - 显示时截断 */}
                       <span 
-                        className="text-xs font-mono text-gray-700 group-hover:opacity-0 transition-opacity whitespace-nowrap"
+                        className="text-[12px] font-mono text-gray-700 group-hover:opacity-0 transition-opacity whitespace-nowrap"
                         title={item.text}  // 完整内容显示在 tooltip
                       >
                         {item.text.length > 20 
-                          ? item.text.slice(0, 20) + '...' 
+                          ? item.text.slice(0, 10) + '…' 
                           : item.text}
                       </span>
                       
