@@ -14,36 +14,50 @@ struct AppState {
 
 #[tauri::command]
 async fn start_python_service(_state: State<'_, AppState>) -> Result<String, String> {
-    #[cfg(debug_assertions)]
-    {
-        // 开发模式：检查Python服务是否在运行
-        match reqwest::get("http://localhost:8001/").await {
-            Ok(_) => Ok("Python service already running".to_string()),
-            Err(_) => Ok("Please start Python service manually: python python-service/server.py".to_string())
-        }
-    }
+    // 检查是否使用远程服务（默认使用远程）
+    let use_remote = std::env::var("USE_REMOTE_SERVICE").unwrap_or_else(|_| "true".to_string()) == "true";
     
-    #[cfg(not(debug_assertions))]
-    {
-        use tauri::api::process::Command;
+    if use_remote {
+        let remote_url = std::env::var("REMOTE_SERVICE_URL").unwrap_or_else(|_| "http://115.190.136.178:8001".to_string());
+        println!("使用远程语音识别服务: {}", remote_url);
         
-        let mut handle = _state.sidecar_handle.lock().unwrap();
-        
-        if handle.is_none() {
-            match Command::new_sidecar("sense_voice_server")
-                .expect("failed to create sidecar")
-                .args(&["--host", "0.0.0.0", "--port", "8001"])
-                .spawn()
-            {
-                Ok((receiver, child)) => {
-                    *handle = Some((receiver, child));
-                    std::thread::sleep(std::time::Duration::from_secs(5));
-                    Ok("Python service started".to_string())
-                }
-                Err(e) => Err(format!("Failed to start service: {}", e))
+        // 检查远程服务是否可用
+        match reqwest::get(&remote_url).await {
+            Ok(_) => Ok(format!("Remote service available at {}", remote_url)),
+            Err(e) => Err(format!("Remote service not available at {}: {}", remote_url, e))
+        }
+    } else {
+        #[cfg(debug_assertions)]
+        {
+            // 开发模式：检查Python服务是否在运行
+            match reqwest::get("http://localhost:1758/").await {
+                Ok(_) => Ok("Python service already running".to_string()),
+                Err(_) => Ok("Please start Python service manually: python python-service/server.py".to_string())
             }
-        } else {
-            Ok("Service already running".to_string())
+        }
+        
+        #[cfg(not(debug_assertions))]
+        {
+            use tauri::api::process::Command;
+            
+            let mut handle = _state.sidecar_handle.lock().unwrap();
+            
+            if handle.is_none() {
+                match Command::new_sidecar("sense_voice_server")
+                    .expect("failed to create sidecar")
+                    .args(&["--host", "0.0.0.0", "--port", "8001"])
+                    .spawn()
+                {
+                    Ok((receiver, child)) => {
+                        *handle = Some((receiver, child));
+                        std::thread::sleep(std::time::Duration::from_secs(5));
+                        Ok("Python service started".to_string())
+                    }
+                    Err(e) => Err(format!("Failed to start service: {}", e))
+                }
+            } else {
+                Ok("Service already running".to_string())
+            }
         }
     }
 }
@@ -78,7 +92,20 @@ async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::
         audio_manager.stop_recording()?
     };
     
-    // 发送到Python服务进行转写
+    // 检查环境变量或配置来决定使用本地还是远程服务
+    // 默认使用远程服务
+    let use_remote = std::env::var("USE_REMOTE_SERVICE").unwrap_or_else(|_| "true".to_string()) == "true";
+    let service_url = if use_remote {
+        // 使用远程服务端 API（默认）
+        std::env::var("REMOTE_SERVICE_URL").unwrap_or_else(|_| "http://115.190.136.178:8001".to_string())
+    } else {
+        // 使用本地服务
+        "http://localhost:1758".to_string()
+    };
+    
+    println!("使用语音识别服务: {}", service_url);
+    
+    // 发送到服务进行转写
     let client = reqwest::Client::new();
     let form = reqwest::multipart::Form::new()
         .part("file", reqwest::multipart::Part::bytes(wav_data)
@@ -88,7 +115,7 @@ async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::
         .text("use_itn", "true");
     
     let response = client
-        .post("http://localhost:8001/transcribe/normal")
+        .post(format!("{}/transcribe/normal", service_url))
         .multipart(form)
         .send()
         .await

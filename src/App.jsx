@@ -6,7 +6,7 @@ import {
   MicrophoneIcon, 
   StopIcon
 } from '@heroicons/react/24/outline';
-import { Copy, Check, Bookmark, X, ArrowUp, Trash2, GripVertical } from 'lucide-react';
+import { Copy, Check, Bookmark, X, ArrowUp, Trash2, GripVertical, Cloud, HardDrive } from 'lucide-react';
 
 // 在组件外部创建 store 实例
 const store = new Store('.settings.dat');
@@ -24,6 +24,7 @@ function App() {
   const [transcriptionMode, setTranscriptionMode] = useState('replace'); // 'replace' or 'append'
   const [copiedItems, setCopiedItems] = useState(new Set()); // 追踪已复制的条目ID
   const [isWindowHovered, setIsWindowHovered] = useState(false); // 追踪窗口悬停状态
+  const [isUsingRemoteService, setIsUsingRemoteService] = useState(false); // 是否使用远程服务
   
   const swipeStartX = useRef(null);
 
@@ -94,6 +95,10 @@ function App() {
       invoke('start_python_service')
         .then(result => {
           console.log('Python service status:', result);
+          // 检查是否使用远程服务
+          if (result.includes('Remote service') || result.includes('115.190.136.178')) {
+            setIsUsingRemoteService(true);
+          }
         })
         .catch(error => {
           console.error('Failed to start Python service:', error);
@@ -527,6 +532,21 @@ function App() {
                   >
                     <Bookmark size={13} className="text-gray-600" />
                   </button>
+
+                  {/* 分隔线 */}
+                  <div className="w-px h-4 bg-gray-300"></div>
+
+                  {/* 模型状态指示器 */}
+                  <div 
+                    className="w-7 h-7 rounded flex items-center justify-center cursor-help"
+                    title={isUsingRemoteService ? "使用云端模型" : "使用本地模型"}
+                  >
+                    {isUsingRemoteService ? (
+                      <Cloud size={13} className="text-blue-500" />
+                    ) : (
+                      <HardDrive size={13} className="text-green-600" />
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

@@ -75,6 +75,12 @@ def parse_args():
         help='并行编译的CPU核心数（默认：使用所有核心）'
     )
     
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='启用调试模式（用于诊断段错误问题）'
+    )
+    
     return parser.parse_args()
 
 def clean_build(mode='dist'):
@@ -112,7 +118,7 @@ def clean_build(mode='dist'):
             shutil.rmtree(dir_name)
             print(f"   ✓ 已清理 {dir_name}")
 
-def build_with_nuitka(cpu_count=None):
+def build_with_nuitka(cpu_count=None, debug_mode=False):
     """使用Nuitka构建 - 支持增量编译
     
     Args:
@@ -154,6 +160,7 @@ def build_with_nuitka(cpu_count=None):
         "--include-package=librosa",      # 保留音频处理
         "--include-package=soundfile",    # 保留音频处理
         "--include-package=numpy",        # 保留numpy
+        "--include-package=scipy",        # librosa需要scipy
         "--include-package=jieba",        # 中文分词
         
         # ===== ONNX 运行时支持 =====
@@ -172,7 +179,7 @@ def build_with_nuitka(cpu_count=None):
         "--nofollow-import-to=matplotlib",
         "--nofollow-import-to=PIL",
         "--nofollow-import-to=sklearn",
-        "--nofollow-import-to=scipy",
+        # "--nofollow-import-to=scipy",  # Keep scipy - required by librosa
         "--nofollow-import-to=pandas",
         "--nofollow-import-to=cv2",
         "--nofollow-import-to=opencv",
@@ -206,6 +213,18 @@ def build_with_nuitka(cpu_count=None):
         # 主程序
         "server.py"
     ]
+    
+    # 添加调试选项（如果启用）
+    if debug_mode:
+        nuitka_cmd.extend([
+            "--debug",
+            "--no-debug-c-warnings",  # 避免gcc编译警告阻止构建
+            "--no-debug-immortal-assumptions"  # 避免Python3.12+的immortal检查错误
+        ])
+        print("🐛 调试模式已启用")
+        print("   - 将生成详细错误信息")
+        print("   - 编译时间会显著增加")
+        print("   - 运行时性能会降低")
     
     # 检测是否为增量编译
     is_incremental = cache_dir.exists() or \
@@ -320,7 +339,7 @@ def main():
                        "nuitka", "ordered-set", "zstandard"])
     
     # 3. 构建
-    if build_with_nuitka(args.jobs):
+    if build_with_nuitka(args.jobs, args.debug):
         print("\n🎉 优化版本编译完成！")
         print("\n💡 优势：")
         print("   - 体积优化（约400-500MB vs 800MB）")

@@ -109,7 +109,7 @@ else
     log_info "🚀 使用Nuitka编译（首次编译需10-20分钟）..."
     log_info "💡 Nuitka优势: 启动速度提升75%，内存占用减少30-40%"
     
-    python build_nuitka.py --onefile  # 为Tauri打包使用单文件模式
+    python build_nuitka.py  # 使用标准模式构建
 
     # 检查编译结果（文件夹模式或单文件模式）
     if [ ! -f "dist/sense_voice_server" ] && [ ! -f "dist/sense_voice_server.exe" ] && [ ! -d "dist" ]; then
