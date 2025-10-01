@@ -13,34 +13,23 @@ struct AppState {
 
 #[tauri::command]
 async fn start_python_service() -> Result<String, String> {
-    // 本地服务模式，检查本地C++ FunASR服务
-    let local_url = std::env::var("LOCAL_SERVICE_URL")
-        .unwrap_or_else(|_| "http://localhost:10095".to_string());
+    // 远程服务模式，无需启动本地服务
+    let remote_url = std::env::var("REMOTE_SERVICE_URL")
+        .unwrap_or_else(|_| "http://115.190.136.178:8001".to_string());
     
-    println!("使用本地FunASR语音识别服务: {}", local_url);
+    println!("使用远程语音识别服务: {}", remote_url);
     
-    // 检查本地服务是否可用
-    let client = reqwest::Client::new();
-    let test_form = reqwest::multipart::Form::new()
-        .part("file", reqwest::multipart::Part::bytes(vec![])
-            .file_name("test.wav")
-            .mime_str("audio/wav").unwrap());
-    
-    match client
-        .post(format!("{}/transcribe/normal", local_url))
-        .multipart(test_form)
-        .send()
-        .await
-    {
-        Ok(_) => Ok(format!("Local FunASR service available at {}", local_url)),
-        Err(e) => Err(format!("Local FunASR service not available: {}. Please start the server with ./run_http_server.sh", e))
+    // 检查远程服务是否可用
+    match reqwest::get(&remote_url).await {
+        Ok(_) => Ok(format!("Remote service available at {}", remote_url)),
+        Err(e) => Err(format!("Remote service not available: {}", e))
     }
 }
 
 #[tauri::command]
 async fn stop_python_service() -> Result<String, String> {
-    // 本地服务模式，提醒手动停止本地服务
-    Ok("Local FunASR service running independently. Stop manually if needed.".to_string())
+    // 远程服务模式，无需停止本地服务
+    Ok("Using remote service, no local service to stop".to_string())
 }
 
 #[tauri::command]
@@ -58,23 +47,20 @@ async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::
         audio_manager.stop_recording()?
     };
     
-    // 使用本地FunASR服务
-    let service_url = std::env::var("LOCAL_SERVICE_URL")
-        .unwrap_or_else(|_| "http://localhost:10095".to_string());
+    // 使用远程服务
+    let service_url = std::env::var("REMOTE_SERVICE_URL")
+        .unwrap_or_else(|_| "http://115.190.136.178:8001".to_string());
     
-    println!("使用本地FunASR语音识别服务: {}", service_url);
+    println!("使用语音识别服务: {}", service_url);
     
-    // 发送到本地FunASR服务进行转写（multipart form格式，直接发送音频数据）
+    // 发送到服务进行转写
     let client = reqwest::Client::new();
     let form = reqwest::multipart::Form::new()
         .part("file", reqwest::multipart::Part::bytes(wav_data)
             .file_name("recording.wav")
             .mime_str("audio/wav").unwrap())
-        .text("wav_format", "wav")
-        .text("itn", "true")
-        .text("audio_fs", "16000")
-        .text("svs_lang", "auto")
-        .text("svs_itn", "true");
+        .text("language", "auto")
+        .text("use_itn", "true");
     
     let response = client
         .post(format!("{}/transcribe/normal", service_url))
