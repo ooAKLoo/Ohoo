@@ -53,7 +53,7 @@ async fn start_audio_recording(state: State<'_, AppState>) -> Result<String, Str
 #[tauri::command]
 async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     // 先获取音频数据，然后释放锁
-    let wav_data = {
+    let pcm_data = {
         let mut audio_manager = state.audio_manager.lock().unwrap();
         audio_manager.stop_recording()?
     };
@@ -64,13 +64,13 @@ async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::
     
     println!("使用本地FunASR语音识别服务: {}", service_url);
     
-    // 发送到本地FunASR服务进行转写（multipart form格式，直接发送音频数据）
+    // 发送到本地FunASR服务进行转写（multipart form格式，直接发送PCM数据）
     let client = reqwest::Client::new();
     let form = reqwest::multipart::Form::new()
-        .part("file", reqwest::multipart::Part::bytes(wav_data)
-            .file_name("recording.wav")
-            .mime_str("audio/wav").unwrap())
-        .text("wav_format", "wav")
+        .part("file", reqwest::multipart::Part::bytes(pcm_data)
+            .file_name("recording.pcm")
+            .mime_str("audio/pcm").unwrap())
+        .text("wav_format", "pcm")  // 明确指定PCM格式
         .text("itn", "true")
         .text("audio_fs", "16000")
         .text("svs_lang", "auto")

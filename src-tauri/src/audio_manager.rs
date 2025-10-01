@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
-use std::io::Cursor;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use hound::{WavSpec, WavWriter};
+use rubato::{SincFixedIn, Resampler, SincInterpolationParameters, SincInterpolationType, WindowFunction};
 
 pub struct AudioManager {
     stream: Option<cpal::Stream>,
@@ -175,12 +174,59 @@ impl AudioManager {
             audio_data
         };
         
-        // 转换为WAV格式
-        self.create_wav(resampled_data)
+        // 直接转换为PCM格式（无WAV头）
+        self.create_pcm(resampled_data)
     }
     
-    // 简单的线性插值重采样
+    // 高质量专业重采样（使用rubato库）
     fn resample(&self, data: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
+        if from_rate == to_rate {
+            return data.to_vec();
+        }
+        
+        let resample_ratio = to_rate as f64 / from_rate as f64;
+        
+        // 创建高质量重采样器
+        let mut resampler = match SincFixedIn::<f32>::new(
+            resample_ratio,
+            2.0,  // 最大重采样比率相对变化
+            SincInterpolationParameters {
+                sinc_len: 256,           // 增加sinc长度提高质量
+                f_cutoff: 0.95,          // 截止频率
+                interpolation: SincInterpolationType::Linear,
+                oversampling_factor: 256,
+                window: WindowFunction::BlackmanHarris2,  // 高质量窗函数
+            },
+            data.len(),
+            1,  // 单声道
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("创建重采样器失败: {:?}, 回退到简单重采样", e);
+                return self.resample_simple(data, from_rate, to_rate);
+            }
+        };
+        
+        // 准备输入数据（二维向量格式，单声道）
+        let input = vec![data.to_vec()];
+        
+        // 执行重采样
+        match resampler.process(&input, None) {
+            Ok(output) => {
+                let resampled = output[0].clone();
+                println!("高质量重采样: {}Hz -> {}Hz ({} -> {} 样本)", 
+                        from_rate, to_rate, data.len(), resampled.len());
+                resampled
+            },
+            Err(e) => {
+                println!("重采样处理失败: {:?}, 回退到简单重采样", e);
+                self.resample_simple(data, from_rate, to_rate)
+            }
+        }
+    }
+    
+    // 简单线性插值重采样（备用方案）
+    fn resample_simple(&self, data: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
         let ratio = from_rate as f32 / to_rate as f32;
         let new_len = (data.len() as f32 / ratio) as usize;
         let mut resampled = Vec::with_capacity(new_len);
@@ -190,7 +236,6 @@ impl AudioManager {
             let src_idx = src_pos as usize;
             
             if src_idx < data.len() - 1 {
-                // 线性插值
                 let frac = src_pos - src_idx as f32;
                 let sample = data[src_idx] * (1.0 - frac) + data[src_idx + 1] * frac;
                 resampled.push(sample);
@@ -199,39 +244,25 @@ impl AudioManager {
             }
         }
         
-        println!("重采样: {}Hz -> 16000Hz ({} -> {} 样本)", 
-                from_rate, data.len(), resampled.len());
+        println!("简单重采样: {}Hz -> {}Hz ({} -> {} 样本)", 
+                from_rate, to_rate, data.len(), resampled.len());
         resampled
     }
     
-    fn create_wav(&self, audio_data: Vec<f32>) -> Result<Vec<u8>, String> {
-        let mut cursor = Cursor::new(Vec::new());
+    fn create_pcm(&self, audio_data: Vec<f32>) -> Result<Vec<u8>, String> {
+        // 直接转换f32到16位PCM，无需WAV头
+        let pcm_data: Vec<u8> = audio_data.iter()
+            .map(|&sample| {
+                let clamped = sample.clamp(-1.0, 1.0);
+                let amplitude = (clamped * i16::MAX as f32) as i16;
+                amplitude.to_le_bytes()
+            })
+            .flatten()
+            .collect();
         
-        let spec = WavSpec {
-            channels: 1,
-            sample_rate: 16000,  // 输出始终是16kHz给Python服务
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
+        println!("生成PCM数据: {} 字节 (原始样本: {})", pcm_data.len(), audio_data.len());
         
-        let mut writer = WavWriter::new(&mut cursor, spec)
-            .map_err(|e| format!("创建WAV写入器失败: {}", e))?;
-        
-        // 转换浮点数据为16位整数
-        for &sample in &audio_data {
-            let clamped = sample.clamp(-1.0, 1.0);
-            let amplitude = (clamped * i16::MAX as f32) as i16;
-            writer.write_sample(amplitude)
-                .map_err(|e| format!("写入音频样本失败: {}", e))?;
-        }
-        
-        writer.finalize()
-            .map_err(|e| format!("完成WAV文件写入失败: {}", e))?;
-        
-        let wav_data = cursor.into_inner();
-        println!("生成WAV文件: {} 字节", wav_data.len());
-        
-        Ok(wav_data)
+        Ok(pcm_data)
     }
     
     pub fn is_recording(&self) -> bool {
