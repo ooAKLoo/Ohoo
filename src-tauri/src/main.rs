@@ -2,13 +2,48 @@
 
 use std::sync::Mutex;
 use tauri::{Manager, State};
-// 删除不需要的导入
+use regex::Regex;
 
 mod audio_manager;
 use audio_manager::AudioManager;
 
 struct AppState {
     audio_manager: Mutex<AudioManager>,
+}
+
+// 清理转写结果中的标识符号
+fn clean_transcription_text(text: &str) -> String {
+    // 创建正则表达式模式，匹配类似 <|zh|><|NEUTRAL|><|Speech|> 的标签
+    let patterns = [
+        r"<\|[^|]+\|>",           // 匹配 <|任何内容|>
+        r"<\|zh\|>",              // 匹配语言标识
+        r"<\|NEUTRAL\|>",         // 匹配情感标识
+        r"<\|Speech\|>",          // 匹配语音类型标识
+        r"<\|en\|>",              // 英文标识
+        r"<\|HAPPY\|>",           // 其他情感标识
+        r"<\|SAD\|>",
+        r"<\|ANGRY\|>",
+        r"<\|CALM\|>",
+    ];
+    
+    let mut cleaned_text = text.to_string();
+    
+    // 应用所有正则表达式模式
+    for pattern in &patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            cleaned_text = re.replace_all(&cleaned_text, "").to_string();
+        }
+    }
+    
+    // 清理多余的空格和标点
+    cleaned_text = cleaned_text.trim().to_string();
+    
+    // 移除连续的空格
+    if let Ok(space_re) = Regex::new(r"\s+") {
+        cleaned_text = space_re.replace_all(&cleaned_text, " ").to_string();
+    }
+    
+    cleaned_text
 }
 
 #[tauri::command]
@@ -87,10 +122,19 @@ async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::
         return Err(format!("转写服务返回错误: {}", response.status()));
     }
     
-    let result: serde_json::Value = response
+    let mut result: serde_json::Value = response
         .json()
         .await
         .map_err(|e| format!("解析转写结果失败: {}", e))?;
+    
+    // 清理转写结果中的标识符号
+    if let Some(text) = result.get("text").and_then(|t| t.as_str()) {
+        let original_text = text.to_string();
+        let cleaned_text = clean_transcription_text(&original_text);
+        result["text"] = serde_json::Value::String(cleaned_text.clone());
+        println!("原始转写结果: {}", original_text);
+        println!("清理后结果: {}", cleaned_text);
+    }
     
     Ok(result)
 }

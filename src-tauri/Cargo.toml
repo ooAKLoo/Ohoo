@@ -19,6 +19,7 @@ tauri = { version = "1.0", features = [ "macos-private-api", "window-unmaximize"
 tauri-plugin-store = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 reqwest = { version = "0.11", features = ["json", "multipart"] }
 tokio = { version = "1", features = ["full"] }
+regex = "1.11"
 # 音频相关依赖
 cpal = "0.15"
 ringbuf = "0.3"
