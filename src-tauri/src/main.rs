@@ -5,10 +5,13 @@ use tauri::{Manager, State};
 use regex::Regex;
 
 mod audio_manager;
+mod server_manager;
 use audio_manager::AudioManager;
+use server_manager::ServerManager;
 
 struct AppState {
     audio_manager: Mutex<AudioManager>,
+    server_manager: Mutex<ServerManager>,
 }
 
 // 清理转写结果中的标识符号
@@ -47,35 +50,33 @@ fn clean_transcription_text(text: &str) -> String {
 }
 
 #[tauri::command]
-async fn start_python_service() -> Result<String, String> {
-    // 本地服务模式，检查本地C++ FunASR服务
-    let local_url = std::env::var("LOCAL_SERVICE_URL")
-        .unwrap_or_else(|_| "http://localhost:10095".to_string());
-    
-    println!("使用本地FunASR语音识别服务: {}", local_url);
-    
-    // 检查本地服务是否可用
-    let client = reqwest::Client::new();
-    let test_form = reqwest::multipart::Form::new()
-        .part("file", reqwest::multipart::Part::bytes(vec![])
-            .file_name("test.wav")
-            .mime_str("audio/wav").unwrap());
-    
-    match client
-        .post(format!("{}/transcribe/normal", local_url))
-        .multipart(test_form)
-        .send()
-        .await
-    {
-        Ok(_) => Ok(format!("Local FunASR service available at {}", local_url)),
-        Err(e) => Err(format!("Local FunASR service not available: {}. Please start the server with ./run_http_server.sh", e))
-    }
+async fn start_python_service(state: State<'_, AppState>) -> Result<String, String> {
+    let server_manager = state.server_manager.lock().unwrap();
+    server_manager.start_server()
 }
 
 #[tauri::command]
-async fn stop_python_service() -> Result<String, String> {
-    // 本地服务模式，提醒手动停止本地服务
-    Ok("Local FunASR service running independently. Stop manually if needed.".to_string())
+async fn stop_python_service(state: State<'_, AppState>) -> Result<String, String> {
+    let server_manager = state.server_manager.lock().unwrap();
+    server_manager.stop_server()
+}
+
+#[tauri::command]
+async fn restart_server(state: State<'_, AppState>) -> Result<String, String> {
+    let server_manager = state.server_manager.lock().unwrap();
+    server_manager.restart_server()
+}
+
+#[tauri::command]
+async fn get_server_status(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let server_manager = state.server_manager.lock().unwrap();
+    Ok(server_manager.get_server_status())
+}
+
+#[tauri::command]
+async fn is_server_running(state: State<'_, AppState>) -> Result<bool, String> {
+    let server_manager = state.server_manager.lock().unwrap();
+    Ok(server_manager.is_running())
 }
 
 #[tauri::command]
@@ -93,9 +94,18 @@ async fn stop_audio_recording(state: State<'_, AppState>) -> Result<serde_json::
         audio_manager.stop_recording()?
     };
     
-    // 使用本地FunASR服务
-    let service_url = std::env::var("LOCAL_SERVICE_URL")
-        .unwrap_or_else(|_| "http://localhost:10095".to_string());
+    // 获取服务器URL
+    let service_url = {
+        let server_manager = state.server_manager.lock().unwrap();
+        let status = server_manager.get_server_status();
+        
+        // 检查服务器是否运行
+        if !status["running"].as_bool().unwrap_or(false) {
+            return Err("语音识别服务未启动，请先启动服务".to_string());
+        }
+        
+        status["server_url"].as_str().unwrap_or("http://127.0.0.1:10095").to_string()
+    };
     
     println!("使用本地FunASR语音识别服务: {}", service_url);
     
@@ -146,16 +156,23 @@ async fn is_audio_recording(state: State<'_, AppState>) -> Result<bool, String> 
 }
 
 fn main() {
-    // 初始化音频管理器
-    let mut audio_manager = AudioManager::new().expect("创建音频管理器失败");
-    audio_manager.initialize().expect("初始化音频系统失败");
-    
     tauri::Builder::default()
-        .manage(AppState {
-            audio_manager: Mutex::new(audio_manager),
-        })
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
+            // 初始化音频管理器
+            let mut audio_manager = AudioManager::new().expect("创建音频管理器失败");
+            audio_manager.initialize().expect("初始化音频系统失败");
+            
+            // 初始化服务器管理器
+            let server_manager = ServerManager::new(app.package_info(), &app.config())
+                .expect("创建服务器管理器失败");
+            
+            // 将管理器添加到应用状态
+            app.manage(AppState {
+                audio_manager: Mutex::new(audio_manager),
+                server_manager: Mutex::new(server_manager),
+            });
+            
             let window = app.get_window("main").unwrap();
             
             // 移除窗口阴影
@@ -174,6 +191,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_python_service, 
             stop_python_service,
+            restart_server,
+            get_server_status,
+            is_server_running,
             start_audio_recording,
             stop_audio_recording,
             is_audio_recording

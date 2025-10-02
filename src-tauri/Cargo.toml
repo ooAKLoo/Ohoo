@@ -27,6 +27,8 @@ hound = "3.5"
 once_cell = "1.19"
 # 高质量重采样库
 rubato = "0.14"
+# 进程管理
+libc = "0.2"
 # 窗口阴影控制
 window-shadows = "0.2"
 

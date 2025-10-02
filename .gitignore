@@ -17,3 +17,4 @@ python-service/*.json
 python-service/*.png
 python-service/.nuitka_cache
 python-service/server.dist
+resources

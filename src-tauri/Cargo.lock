@@ -2300,6 +2300,7 @@ dependencies = [
  "cocoa 0.24.1",
  "cpal",
  "hound",
+ "libc",
  "once_cell",
  "regex",
  "reqwest",
